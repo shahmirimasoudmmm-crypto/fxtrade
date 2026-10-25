@@ -1,0 +1,716 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#0f766e"><link rel="icon" href="icon-192.png"><link rel="apple-touch-icon" href="icon-192.png"><title>FxTrade</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700&display=swap">
+<style>
+  /* Layout: single phone-width column, tabs on top, form then result, as in the Android app. */
+  :root {
+    --bg: #eef1f4;
+    --surface: #ffffff;
+    --surface-2: #f5f7f9;
+    --ink: #16202a;
+    --muted: #5d6b78;
+    --line: #d5dce3;
+    --accent: #1d5fa8;
+    --accent-ink: #ffffff;
+    --good: #1f7a3a;
+    --bad: #b3261e;
+    --note-bg: #fff4d6;
+    --note-ink: #5a4300;
+    --font: "Vazirmatn", "Segoe UI", Tahoma, system-ui, sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #10161c; --surface: #18212a; --surface-2: #1f2a34; --ink: #e6ecf1; --muted: #93a2b0;
+      --line: #2e3b47; --accent: #6aa8ea; --accent-ink: #0b1620; --good: #5fcf80; --bad: #ff8a80;
+      --note-bg: #3a3017; --note-ink: #f2dca0; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10161c; --surface: #18212a; --surface-2: #1f2a34; --ink: #e6ecf1; --muted: #93a2b0;
+    --line: #2e3b47; --accent: #6aa8ea; --accent-ink: #0b1620; --good: #5fcf80; --bad: #ff8a80;
+    --note-bg: #3a3017; --note-ink: #f2dca0; color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 15px; line-height: 1.6;
+    padding-block: 12px 40px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .app { max-width: 520px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+  h1 { font-size: 20px; margin: 0; }
+  .sub { color: var(--muted); font-size: 13px; }
+  .note { background: var(--note-bg); color: var(--note-ink); border-radius: 8px; padding: 10px 12px; font-size: 13px; }
+  .tabs { display: grid; grid-template-columns: 1fr 1fr; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 3px; gap: 3px; }
+  .tabs button { border: 0; background: none; color: var(--muted); font: inherit; padding: 8px; border-radius: 8px; cursor: pointer; }
+  .tabs button[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+  .stack { display: flex; flex-direction: column; gap: 12px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .card h3 { margin: 0; font-size: 14px; }
+  .lbl { font-size: 13px; font-weight: 500; }
+  .fld { display: flex; flex-direction: column; gap: 3px; }
+  .fld > span { font-size: 13px; color: var(--muted); }
+  input[type="text"], select {
+    font: inherit; color: var(--ink); background: var(--surface-2); border: 1px solid var(--line);
+    border-radius: 8px; padding: 9px 10px; width: 100%; min-width: 0;
+  }
+  input[type="text"] { direction: ltr; text-align: left; font-variant-numeric: tabular-nums; }
+  input.bad { border-color: var(--bad); outline: 1px solid var(--bad); }
+  select { direction: ltr; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .err { color: var(--bad); font-size: 12px; min-height: 0; }
+  .err:empty { display: none; }
+  .row { display: flex; gap: 8px; }
+  .row > * { flex: 1; min-width: 0; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chips button {
+    flex: 1; min-width: 0; font: inherit; font-size: 13px; padding: 7px 8px; cursor: pointer;
+    background: var(--surface-2); color: var(--ink); border: 1px solid var(--line); border-radius: 8px;
+  }
+  .chips button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; }
+  .btn { font: inherit; padding: 11px; border-radius: 10px; border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink); cursor: pointer; font-weight: 700; width: 100%; }
+  .btn.ghost { background: transparent; color: var(--accent); }
+  .btn.danger { background: transparent; color: var(--bad); border-color: var(--bad); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .lv { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+  .lv .v { direction: ltr; text-align: left; font-variant-numeric: tabular-nums; font-weight: 500; }
+  .lv .k { color: var(--muted); font-size: 13px; }
+  hr { border: 0; border-top: 1px solid var(--line); margin: 2px 0; width: 100%; }
+  .profit.pos { color: var(--good); } .profit.neg { color: var(--bad); }
+  .profit { font-weight: 700; font-size: 16px; }
+  pre.msg { margin: 0; font-family: var(--mono); font-size: 13px; direction: ltr; text-align: left; white-space: pre-wrap; word-break: break-word; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 10px; }
+  .confirm { border: 1px solid var(--bad); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 8px; background: var(--surface); }
+  .toast { position: fixed; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 8px 16px; border-radius: 20px; font-size: 13px; z-index: 20; }
+  .sw { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px; }
+  .hist { text-align: start; font: inherit; color: inherit; cursor: pointer; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; width: 100%; }
+  .hist .t { color: var(--muted); font-size: 12px; direction: ltr; text-align: right; }
+  .hist .l { direction: ltr; text-align: left; }
+  details summary { cursor: pointer; font-weight: 500; }
+  details .chips { margin-top: 8px; }
+  details .chips button { flex: 1 1 100%; text-align: start; }
+  [hidden] { display: none !important; }
+  @media (prefers-reduced-motion: no-preference) { .tabs button, .chips button, .btn { transition: background .12s; } }
+.badge{font-size:12px;padding:3px 8px;border-radius:999px;border:1px solid var(--line,#8884);white-space:nowrap}.badge.cloud{color:#0a7a3d;border-color:#0a7a3d}.badge.error{color:#b3261e;border-color:#b3261e}
+</style>
+</head>
+<body>
+
+<div class="app" dir="rtl" lang="fa">
+  <div class="stack" style="gap:4px">
+    <h1>FxTrade</h1>
+    <div class="sub">محاسبه معاملات ارزی — نسخه مستقل و آفلاین</div>
+  </div>
+  <div class="note">سوابق فقط روی همین گوشی ذخیره می‌شوند. هفته‌ای یک بار از تب «سوابق» ← «خروجی Excel» پشتیبان بگیر.</div>
+
+  <div class="tabs" role="tablist">
+    <button id="tab-calc" role="tab" aria-selected="true">ماشین‌حساب</button>
+    <button id="tab-hist" role="tab" aria-selected="false">سوابق</button>
+  </div>
+
+  <div id="view-calc" class="stack"></div>
+  <div id="view-hist" class="stack" hidden></div>
+</div>
+<div id="toast" class="toast" hidden></div>
+
+<script id="core">
+/* ===== هستهٔ محاسبات: پورت مستقیم DecimalParser / TradeCalculator / NumberFormatter / MessageBuilder / CsvExport ===== */
+const MINUS = new Set(['-', '−', '–', '‐', '﹣', '－']);
+const SEPS = new Set(['.', ',', '٫', '،']);
+const COMMA_LIKE = new Set([',', '،']);
+const INVIS = new Set(['‎', '‏', '‌', '‍', '‪', '‫', '‬', ' ', ' ']);
+
+function digitVal(c) {
+  const k = c.charCodeAt(0);
+  if (k >= 48 && k <= 57) return k - 48;
+  if (k >= 0x660 && k <= 0x669) return k - 0x660;
+  if (k >= 0x6F0 && k <= 0x6F9) return k - 0x6F0;
+  return null;
+}
+const isWs = (c) => /\s/.test(c);
+
+function filterTyping(raw) {
+  let out = '';
+  for (const c of raw) {
+    if (INVIS.has(c) || isWs(c)) continue;
+    if (digitVal(c) !== null || SEPS.has(c) || MINUS.has(c)) out += c;
+  }
+  return out;
+}
+
+/* اعداد دهدهی دقیق: مقدار = n / 10^s با BigInt (هیچ Number اعشاری در محاسبه نیست) */
+const P10 = (k) => 10n ** BigInt(k);
+const D = (n, s) => ({ n, s });
+const babs = (x) => (x < 0n ? -x : x);
+function align(a, b) { const s = Math.max(a.s, b.s); return [a.n * P10(s - a.s), b.n * P10(s - b.s), s]; }
+const add = (a, b) => { const [x, y, s] = align(a, b); return D(x + y, s); };
+const sub = (a, b) => { const [x, y, s] = align(a, b); return D(x - y, s); };
+const mul = (a, b) => D(a.n * b.n, a.s + b.s);
+const movePointLeft = (a, k) => D(a.n, a.s + k);
+const sign = (a) => (a.n > 0n ? 1 : a.n < 0n ? -1 : 0);
+const neg = (a) => D(-a.n, a.s);
+const cmp = (a, b) => { const [x, y] = align(a, b); return x < y ? -1 : x > y ? 1 : 0; };
+const ZERO = D(0n, 0);
+
+function strip(a) {
+  let { n, s } = a;
+  if (n === 0n) return D(0n, 0);
+  while (s > 0 && n % 10n === 0n) { n /= 10n; s--; }
+  return D(n, s);
+}
+function toPlain(a) {
+  const { n, s } = strip(a);
+  const neg_ = n < 0n; let d = babs(n).toString();
+  if (s > 0) { d = d.padStart(s + 1, '0'); d = d.slice(0, d.length - s) + '.' + d.slice(d.length - s); }
+  return (neg_ ? '-' : '') + d;
+}
+function fromPlain(str) {
+  let negative = false; let t = str;
+  if (t[0] === '-') { negative = true; t = t.slice(1); }
+  const [i, f = ''] = t.split('.');
+  const n = BigInt((i || '0') + f);
+  return D(negative ? -n : n, f.length);
+}
+function exactScale(a) { return Math.max(0, strip(a).s); }
+
+/* تقسیم با ۳۴ رقم معنادار و HALF_EVEN (مثل MathContext(34, HALF_EVEN)) */
+function divide(a, b) {
+  if (a.n === 0n) return ZERO;
+  const K = 60 + babs(b.n).toString().length;
+  const num = a.n * P10(K);
+  let q = num / b.n; const rem0 = num % b.n;
+  let scale = K + a.s - b.s;
+  const negative = q < 0n || (q === 0n && (num < 0n) !== (b.n < 0n));
+  let qa = babs(q); let sticky = rem0 !== 0n;
+  const digits = qa.toString().length;
+  if (digits > 34) {
+    const drop = digits - 34; const dv = P10(drop);
+    const r = qa % dv; qa = qa / dv; scale -= drop;
+    const twice = r * 2n;
+    if (twice > dv || (twice === dv && (sticky || qa % 2n === 1n))) qa += 1n;
+  }
+  let n = negative ? -qa : qa;
+  if (scale < 0) { n *= P10(-scale); scale = 0; }
+  return D(n, scale);
+}
+
+function roundHalfUp(a, d) {
+  if (a.s <= d) return a;
+  const dv = P10(a.s - d);
+  let q = a.n / dv; const r = a.n % dv;
+  if (babs(r) * 2n >= dv) q += a.n < 0n ? -1n : 1n;
+  return D(q, d);
+}
+function group(intStr) { return intStr.replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+function money(a, maxDec) {
+  const r = strip(roundHalfUp(a, Math.max(0, maxDec)));
+  const neg_ = r.n < 0n; let d = babs(r.n).toString();
+  let frac = '';
+  if (r.s > 0) { d = d.padStart(r.s + 1, '0'); frac = '.' + d.slice(d.length - r.s); d = d.slice(0, d.length - r.s); }
+  const out = group(d) + frac;
+  return (neg_ ? '-' : '') + out;
+}
+const plain = (a) => toPlain(a);
+
+/* ----- پارسر ----- */
+function parseDetailed(raw) {
+  const cleaned = [...raw].filter((c) => !(INVIS.has(c) || isWs(c))).join('');
+  if (cleaned === '') return { k: 'empty' };
+  let body = cleaned; let negative = false;
+  if (MINUS.has(body[0])) { negative = true; body = body.slice(1); }
+  let digits = ''; let sepCount = 0; let sepChar = null; let intLen = 0; let fracLen = 0;
+  for (const c of body) {
+    const d = digitVal(c);
+    if (d !== null) { digits += d; if (sepChar === null) intLen++; else fracLen++; }
+    else if (SEPS.has(c)) { sepCount++; sepChar = c; digits += '.'; }
+    else return { k: 'invalid' };
+  }
+  if (sepCount > 1) return { k: 'invalid' };
+  if (intLen + fracLen === 0) return { k: 'invalid' };
+  if (sepChar !== null && COMMA_LIKE.has(sepChar) && fracLen === 3 && intLen >= 1 && intLen <= 3 && digitVal(body[0]) !== 0)
+    return { k: 'ambiguous' };
+  if (digits.startsWith('.')) digits = '0' + digits;
+  if (digits.endsWith('.')) digits += '0';
+  const v = fromPlain(digits);
+  return { k: 'value', v: negative ? neg(v) : v };
+}
+
+const REASONS = {
+  EMPTY: 'خالی است',
+  INVALID: 'عدد نامعتبر است',
+  NOT_POSITIVE: 'باید بزرگ‌تر از صفر باشد',
+  NEGATIVE: 'عدد منفی مجاز نیست',
+  AMBIGUOUS_COMMA: 'ویرگول مبهم است؛ برای اعشار نقطه بزن (مثلاً 3.685)',
+};
+
+function convert(amount, rate, method) { return method === 'MULTIPLY' ? mul(amount, rate) : divide(amount, rate); }
+function applyEffect(base, fee, effect) { return effect === 'ADDED' ? add(base, fee) : effect === 'DEDUCTED' ? sub(base, fee) : base; }
+
+function calculate(f) {
+  const errors = [];
+  const fail = (field, reason) => { errors.push({ field, reason }); return null; };
+  const positive = (field, raw) => {
+    const p = parseDetailed(raw);
+    if (p.k === 'empty') return fail(field, 'EMPTY');
+    if (p.k === 'invalid') return fail(field, 'INVALID');
+    if (p.k === 'ambiguous') return fail(field, 'AMBIGUOUS_COMMA');
+    if (sign(p.v) < 0) return fail(field, 'NEGATIVE');
+    if (sign(p.v) === 0) return fail(field, 'NOT_POSITIVE');
+    return p.v;
+  };
+  const percent = (field, raw) => {
+    const p = parseDetailed(raw);
+    if (p.k === 'empty') return ZERO;
+    if (p.k === 'invalid') return fail(field, 'INVALID');
+    if (p.k === 'ambiguous') return fail(field, 'AMBIGUOUS_COMMA');
+    if (sign(p.v) < 0) return fail(field, 'NEGATIVE');
+    return p.v;
+  };
+  const amount = positive('amount', f.amount);
+  if (f.mode === 'FEE') {
+    const rate = positive('baseRate', f.baseRate);
+    const sp = percent('sellerPercent', f.sellerPercent);
+    const bp = percent('buyerPercent', f.buyerPercent);
+    if (errors.length || !amount || !rate || !sp || !bp) return { ok: false, errors };
+    const base = convert(amount, rate, f.method);
+    const sellerFee = movePointLeft(mul(base, sp), 2);
+    const buyerFee = movePointLeft(mul(base, bp), 2);
+    const pay = applyEffect(base, sellerFee, f.sellerEffect);
+    const receive = applyEffect(base, buyerFee, f.buyerEffect);
+    return { ok: true, r: { amount, origin: f.origin, dest: f.dest, method: f.method, mode: f.mode, buyRate: rate, sellRate: rate, base,
+      sellerPercent: sp, sellerEffect: f.sellerEffect, sellerFee, buyerPercent: bp, buyerEffect: f.buyerEffect, buyerFee,
+      payToSeller: pay, receiveFromBuyer: receive, profit: sub(receive, pay) } };
+  }
+  const buyRate = positive('buyRate', f.buyRate);
+  const sellRate = positive('sellRate', f.sellRate);
+  if (errors.length || !amount || !buyRate || !sellRate) return { ok: false, errors };
+  const pay = convert(amount, buyRate, f.method);
+  const receive = convert(amount, sellRate, f.method);
+  return { ok: true, r: { amount, origin: f.origin, dest: f.dest, method: f.method, mode: f.mode, buyRate, sellRate, base: null,
+    sellerPercent: null, sellerEffect: 'NO_CHANGE', sellerFee: null, buyerPercent: null, buyerEffect: 'NO_CHANGE', buyerFee: null,
+    payToSeller: pay, receiveFromBuyer: receive, profit: sub(receive, pay) } };
+}
+
+/* ----- پیام‌ها ----- */
+const pad2 = (n) => String(n).padStart(2, '0');
+function fmtTime(ms) { const d = new Date(ms); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`; }
+const EFFECT_CODE = { ADDED: 'ADDED', DEDUCTED: 'DEDUCTED', NO_CHANGE: 'NO CHANGE' };
+function buildMsg(title, r, rate, percent, fee, effect, feeLabel, total, decimals, ms) {
+  const lines = [title];
+  const amountDec = Math.max(decimals, exactScale(r.amount));
+  lines.push(`AMOUNT: ${money(r.amount, amountDec)} (${r.origin})`);
+  lines.push(`RATE: ${plain(rate)}`);
+  if (r.mode === 'FEE' && percent && fee) lines.push(`${feeLabel}: ${plain(percent)}% = ${money(fee, decimals)} (${r.dest}) (${EFFECT_CODE[effect]})`);
+  lines.push(`TOTAL: ${money(total, decimals)} (${r.dest})`);
+  if (ms != null) lines.push(`DATE: ${fmtTime(ms)}`);
+  return lines.join('\n');
+}
+const buyMsg = (r, d, ms) => buildMsg('BUY', r, r.buyRate, r.sellerPercent, r.sellerFee, r.sellerEffect, 'SELLER FEE', r.payToSeller, d, ms);
+const sellMsg = (r, d, ms) => buildMsg('SELL', r, r.sellRate, r.buyerPercent, r.buyerFee, r.buyerEffect, 'BUYER FEE', r.receiveFromBuyer, d, ms);
+
+function csvEscape(s) { return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
+function buildCsv(trades) {
+  const head = 'id,datetime,amount,origin,dest,method,mode,buy_rate,sell_rate,base,seller_percent,seller_effect,seller_fee,buyer_percent,buyer_effect,buyer_fee,pay_to_seller,receive_from_buyer,profit';
+  const p = (v) => (v ? plain(v) : '');
+  const rows = trades.map((t) => { const r = t.result; return [t.id, fmtTime(t.createdAt), p(r.amount), r.origin, r.dest, r.method, r.mode, p(r.buyRate), p(r.sellRate), p(r.base), p(r.sellerPercent), r.sellerEffect, p(r.sellerFee), p(r.buyerPercent), r.buyerEffect, p(r.buyerFee), p(r.payToSeller), p(r.receiveFromBuyer), p(r.profit)].map(String).map(csvEscape).join(','); });
+  return [head, ...rows].join('\n') + '\n';
+}
+const X_CONTENT_TYPES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`;
+const X_ROOT_RELS = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`;
+const X_WORKBOOK = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="معاملات" sheetId="1" r:id="rId1"/></sheets></workbook>`;
+const X_WORKBOOK_RELS = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`;
+const X_STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="2"><numFmt numFmtId="164" formatCode="yyyy\-mm\-dd\ hh:mm"/><numFmt numFmtId="165" formatCode="#,##0.00"/></numFmts><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFD9E2F3"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFBFBFBF"/></left><right style="thin"><color rgb="FFBFBFBF"/></right><top style="thin"><color rgb="FFBFBFBF"/></top><bottom style="thin"><color rgb="FFBFBFBF"/></bottom><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="8"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf><xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="165" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf><xf numFmtId="1" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="165" fontId="1" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
+
+/* ===== شرح فارسی و خروجی Excel (پورت TradeDescription / XlsxExport) ===== */
+const FA = '۰۱۲۳۴۵۶۷۸۹';
+const toFa = (s) => s.replace(/[0-9]/g, (d) => FA[d]).replace(/\./g, '٫').replace(/,/g, '٬');
+function currencyName(code) {
+  const parts = code.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return code;
+  const base = { USD: 'دلار', AED: 'درهم', CNY: 'یوان', EUR: 'یورو', USDT: 'تتر', IRR: 'ریال', IRT: 'تومان' }[parts[0]] || parts[0];
+  const rest = parts.slice(1).map((p) => (p === 'CASH' ? 'نقدی' : p)).join(' ');
+  return rest ? base + ' ' + rest : base;
+}
+function amountPhrase(a) {
+  const abs = D(babs(a.n), a.s);
+  for (const [k, name] of [[9, 'میلیارد'], [6, 'میلیون'], [3, 'هزار']]) {
+    if (cmp(abs, D(10n ** BigInt(k), 0)) >= 0) {
+      const q = strip(movePointLeft(a, k));
+      if (q.s <= (k === 3 ? 0 : 3)) return toFa(toPlain(q)) + ' ' + name;
+      break;
+    }
+  }
+  return toFa(money(a, exactScale(a)));
+}
+const rateFa = (v) => plain(v).replace('.', ',');
+function tradeDescription(r) {
+  const mul_ = r.method === 'MULTIPLY';
+  const ratePart = r.mode === 'FEE'
+    ? (mul_ ? 'در ریت ' : 'با تقسیم بر ریت ') + rateFa(r.buyRate)
+    : (mul_ ? 'در ریت خرید ' : 'با تقسیم بر ریت خرید ') + rateFa(r.buyRate) + ' و ریت فروش ' + rateFa(r.sellRate);
+  return `مبلغ ${amountPhrase(r.amount)} ${currencyName(r.origin)} ${ratePart} تبدیل به ${currencyName(r.dest)}`;
+}
+function exportRows(trades) {
+  return [...trades].sort((x, y) => x.createdAt - y.createdAt || String(x.id).localeCompare(String(y.id)))
+    .map((t, i) => ({ index: i + 1, createdAt: t.createdAt, description: tradeDescription(t.result), fee: t.result.profit, currency: currencyName(t.result.dest) }));
+}
+function cellNumber(v) { const r = strip(roundHalfUp(v, 6)); return r.n === 0n ? '0' : toPlain(r); }
+function excelDate(ms) {
+  const d = new Date(ms);
+  const days = Math.round((Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) - Date.UTC(1899, 11, 30)) / 86400000);
+  const secs = d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds();
+  const frac = secs === 0 ? '' : (secs / 86400).toFixed(10).replace(/0+$/, '').slice(1);
+  return String(days) + frac;
+}
+const xmlEsc = (s) => String(s).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+function sheetXml(rows) {
+  const ref = (c, r) => String.fromCharCode(65 + c) + r;
+  const str = (rf, t, s) => `<c r="${rf}" s="${s}" t="inlineStr"><is><t xml:space="preserve">${xmlEsc(t)}</t></is></c>`;
+  const num = (rf, v, s) => `<c r="${rf}" s="${s}"><v>${v}</v></c>`;
+  const fml = (rf, f, v, s) => `<c r="${rf}" s="${s}"><f>${xmlEsc(f)}</f><v>${v}</v></c>`;
+  let x = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+    '<sheetViews><sheetView rightToLeft="1" workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>' +
+    '<sheetFormatPr defaultRowHeight="18"/><cols><col min="1" max="1" width="8" customWidth="1"/><col min="2" max="2" width="18" customWidth="1"/><col min="3" max="3" width="70" customWidth="1"/><col min="4" max="4" width="20" customWidth="1"/><col min="5" max="5" width="22" customWidth="1"/></cols><sheetData>';
+  x += '<row r="1">' + ['ردیف', 'تاریخ', 'شرح', 'مبلغ کارمزد', 'ارز کارمزد'].map((h, i) => str(ref(i, 1), h, 1)).join('') + '</row>';
+  rows.forEach((r, i) => {
+    const n = i + 2;
+    x += `<row r="${n}">` + num(ref(0, n), r.index, 5) + num(ref(1, n), excelDate(r.createdAt), 3) + str(ref(2, n), r.description, 2) + num(ref(3, n), cellNumber(r.fee), 4) + str(ref(4, n), r.currency, 2) + '</row>';
+  });
+  const last = rows.length + 1; let row = rows.length + 3;
+  if (rows.length) {
+    for (const cur of [...new Set(rows.map((r) => r.currency))]) {
+      const sum = rows.filter((r) => r.currency === cur).reduce((a, r) => add(a, r.fee), ZERO);
+      x += `<row r="${row}">` + str(ref(2, row), 'جمع مبلغ کارمزد', 6) + fml(ref(3, row), `SUMIF($E$2:$E$${last},E${row},$D$2:$D$${last})`, cellNumber(sum), 7) + str(ref(4, row), cur, 2) + '</row>';
+      row++;
+    }
+  }
+  x += `<row r="${row}">` + str(ref(2, row), 'تعداد معاملات', 6) +
+    (rows.length ? fml(ref(3, row), `COUNT($A$2:$A$${last})`, rows.length, 5) : num(ref(3, row), 0, 5)) + '</row>';
+  return x + '</sheetData></worksheet>';
+}
+/* ZIP بدون فشرده‌سازی (store)؛ برای xlsx کافی و بدون وابستگی به کتابخانه */
+const CRC_TABLE = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(b) { let c = 0xFFFFFFFF; for (let i = 0; i < b.length; i++) c = CRC_TABLE[(c ^ b[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+function zipStore(files) {
+  const enc = new TextEncoder(); const chunks = []; const central = []; let offset = 0;
+  const u16 = (v) => [v & 255, (v >>> 8) & 255]; const u32 = (v) => [v & 255, (v >>> 8) & 255, (v >>> 16) & 255, (v >>> 24) & 255];
+  for (const f of files) {
+    const name = enc.encode(f.name); const data = enc.encode(f.text); const crc = crc32(data);
+    const local = Uint8Array.from([0x50, 0x4B, 3, 4, ...u16(20), ...u16(0x0800), ...u16(0), ...u16(0), ...u16(0x21), ...u32(crc), ...u32(data.length), ...u32(data.length), ...u16(name.length), ...u16(0)]);
+    chunks.push(local, name, data);
+    central.push(Uint8Array.from([0x50, 0x4B, 1, 2, ...u16(20), ...u16(20), ...u16(0x0800), ...u16(0), ...u16(0), ...u16(0x21), ...u32(crc), ...u32(data.length), ...u32(data.length), ...u16(name.length), ...u16(0), ...u16(0), ...u16(0), ...u16(0), ...u32(0), ...u32(offset)]), name);
+    offset += local.length + name.length + data.length;
+  }
+  let cdSize = 0; central.forEach((c) => { cdSize += c.length; });
+  const end = Uint8Array.from([0x50, 0x4B, 5, 6, ...u16(0), ...u16(0), ...u16(files.length), ...u16(files.length), ...u32(cdSize), ...u32(offset), ...u16(0)]);
+  const all = [...chunks, ...central, end]; const out = new Uint8Array(all.reduce((s, c) => s + c.length, 0)); let p = 0;
+  all.forEach((c) => { out.set(c, p); p += c.length; }); return out;
+}
+function buildXlsx(trades) {
+  return zipStore([
+    { name: '[Content_Types].xml', text: X_CONTENT_TYPES }, { name: '_rels/.rels', text: X_ROOT_RELS },
+    { name: 'xl/workbook.xml', text: X_WORKBOOK }, { name: 'xl/_rels/workbook.xml.rels', text: X_WORKBOOK_RELS },
+    { name: 'xl/styles.xml', text: X_STYLES }, { name: 'xl/worksheets/sheet1.xml', text: sheetXml(exportRows(trades)) },
+  ]);
+}
+</script>
+
+<script>
+/* ===== رابط کاربری ===== */
+const CUR = ['USD NRA', 'USD CASH THR', 'USD CASH TUR', 'AED', 'AED CASH', 'CNY NRA', 'EUR NRA', 'EUR CASH THR', 'EUR CASH TUR', 'USDT', 'IRR', 'IRT'];
+const EFFECTS = [['ADDED', 'اضافه'], ['DEDUCTED', 'کسر'], ['NO_CHANGE', 'بدون تغییر']];
+const INITIAL = { mode: 'FEE', amount: '', origin: 'USD NRA', dest: 'AED CASH', method: 'MULTIPLY', baseRate: '', buyRate: '', sellRate: '',
+  sellerPercent: '', sellerEffect: 'NO_CHANGE', buyerPercent: '', buyerEffect: 'NO_CHANGE' };
+const NUM_KEYS = ['amount', 'baseRate', 'buyRate', 'sellRate', 'sellerPercent', 'buyerPercent'];
+
+const S = { form: { ...INITIAL }, decimals: 2, calc: null, savedSnap: null, history: [], tab: 'calc', detailId: null, confirm: null, nextId: 1 };
+
+function load(key, fallback) { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch (e) { return fallback; } }
+function store(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) { /* بدون ذخیره هم کار می‌کند */ } }
+
+const decToS = (d) => (d ? toPlain(d) : null);
+const sToDec = (s) => (s == null ? null : fromPlain(s));
+const RES_KEYS = ['amount', 'buyRate', 'sellRate', 'base', 'sellerPercent', 'sellerFee', 'buyerPercent', 'buyerFee', 'payToSeller', 'receiveFromBuyer', 'profit'];
+function serializeTrade(t) { const r = { ...t.result }; RES_KEYS.forEach((k) => { r[k] = decToS(r[k]); }); return { id: t.id, createdAt: t.createdAt, result: r }; }
+function deserializeTrade(t) { const r = { ...t.result }; RES_KEYS.forEach((k) => { r[k] = sToDec(r[k]); }); return { id: t.id, createdAt: t.createdAt, result: r }; }
+let IDB = null; let dbState = 'local'; // local | cloud | error
+let dbQueue = Promise.resolve();
+function setDbBadge() { const el = $('dbstate'); if (!el) return; el.textContent = dbState === 'cloud' ? 'ذخیره روی این گوشی ✓' : dbState === 'error' ? 'خطا در ذخیره؛ از Excel پشتیبان بگیر' : 'در حال آماده‌سازی…'; el.className = 'badge ' + dbState; }
+function idbOpen() { return new Promise((res, rej) => { const q = indexedDB.open('fxtrade', 1); q.onupgradeneeded = () => q.result.createObjectStore('trades', { keyPath: 'id' }); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); }
+function idbTx(mode, fn) { return new Promise((res, rej) => { const tx = IDB.transaction('trades', mode); const r = fn(tx.objectStore('trades')); tx.oncomplete = () => res(r && r.result); tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error); }); }
+function dbRun(fn) { if (!IDB) return; dbQueue = dbQueue.then(fn).catch(() => { dbState = 'error'; setDbBadge(); }); }
+function persistHistory() { store('fx.history', S.history.map(serializeTrade)); }
+function dbSave(t) { dbRun(() => idbTx('readwrite', (os) => os.put(serializeTrade(t)))); }
+function dbDelete(id) { dbRun(() => idbTx('readwrite', (os) => os.delete(id))); }
+async function initDb() {
+  try {
+    IDB = await idbOpen();
+    const all = await idbTx('readonly', (os) => os.getAll());
+    const remote = new Map(); (all || []).forEach((d) => { try { remote.set(d.id, deserializeTrade(d)); } catch (e) { /* رکورد خراب نادیده */ } });
+    const localOnly = S.history.filter((t) => !remote.has(t.id));
+    S.history = [...remote.values(), ...localOnly].sort((a, b) => b.createdAt - a.createdAt);
+    localOnly.forEach(dbSave); persistHistory(); dbState = 'cloud'; setDbBadge();
+    try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) { /* اختیاری */ }
+    if (S.tab === 'hist') renderHistory();
+  } catch (e) { IDB = null; dbState = 'error'; setDbBadge(); }
+}
+function persistDraft() { store('fx.draft', { form: S.form, decimals: S.decimals }); }
+
+(function restore() {
+  const d = load('fx.draft', null);
+  if (d && d.form) {
+    S.form = { ...INITIAL, ...d.form };
+    NUM_KEYS.forEach((k) => { S.form[k] = filterTyping(String(S.form[k] ?? '')); });
+    S.decimals = Number.isInteger(d.decimals) ? d.decimals : 2;
+  }
+  try { S.history = load('fx.history', []).map(deserializeTrade); } catch (e) { S.history = []; }
+  S.nextId = Math.max(Date.now(), S.history.reduce((m, t) => Math.max(m, t.id), 0) + 1);
+})();
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+let toastTimer;
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 1800); }
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); toast('کپی شد'); return; } catch (e) { /* ادامه با روش جایگزین */ }
+  const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select();
+  let ok = false; try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+  document.body.removeChild(ta); toast(ok ? 'کپی شد' : 'کپی نشد؛ متن را دستی انتخاب کن');
+}
+
+const snap = () => JSON.stringify(S.form);
+const hasNumericInput = () => NUM_KEYS.some((k) => S.form[k].trim() !== '');
+function freshCalc() { return S.calc && S.calc.snap === snap() ? S.calc : null; }
+
+/* ---------- فرم ---------- */
+function numField(key, label) {
+  return `<label class="fld"><span>${label}</span><input type="text" id="f-${key}" data-key="${key}" inputmode="decimal" autocomplete="off" spellcheck="false" enterkeyhint="next"><small class="err" id="e-${key}"></small></label>`;
+}
+function chips(group, items, selected) {
+  return `<div class="chips" data-group="${group}">` + items.map(([v, l]) => `<button type="button" data-v="${esc(v)}" aria-pressed="${String(v) === String(selected)}">${esc(l)}</button>`).join('') + '</div>';
+}
+function options(list, sel) { return list.map((c) => `<option${c === sel ? ' selected' : ''}>${esc(c)}</option>`).join(''); }
+
+function buildForm() {
+  const f = S.form;
+  const fee = f.mode === 'FEE';
+  $('view-calc').innerHTML = `
+    <div class="card">
+      <div class="lbl">حالت درآمد واسطه</div>
+      ${chips('mode', [['FEE', 'کارمزد'], ['SPREAD', 'اختلاف ریت']], f.mode)}
+      ${numField('amount', 'مبلغ معامله')}
+      <div class="row">
+        <label class="fld"><span>ارز مبدأ</span><select id="f-origin">${options(CUR, f.origin)}</select></label>
+        <label class="fld"><span>ارز مقصد</span><select id="f-dest">${options(CUR, f.dest)}</select></label>
+      </div>
+      <div class="lbl">روش محاسبه</div>
+      ${chips('method', [['MULTIPLY', 'ضرب (مبلغ × ریت)'], ['DIVIDE', 'تقسیم (مبلغ ÷ ریت)']], f.method)}
+      ${fee ? numField('baseRate', 'ریت پایه') : numField('buyRate', 'ریت خرید از فروشنده') + numField('sellRate', 'ریت فروش به خریدار')}
+    </div>
+    ${fee ? `
+    <div class="card"><h3>کارمزد فروشنده</h3>${numField('sellerPercent', 'درصد (۰.۲ یعنی ۰.۲ درصد)')}${chips('sellerEffect', EFFECTS, f.sellerEffect)}</div>
+    <div class="card"><h3>هزینه خریدار</h3>${numField('buyerPercent', 'درصد (۰.۱ یعنی ۰.۱ درصد)')}${chips('buyerEffect', EFFECTS, f.buyerEffect)}</div>` : ''}
+    <div class="card">
+      <div class="lbl">حداکثر رقم اعشار نمایش خروجی</div>
+      ${chips('decimals', [0, 1, 2, 3, 4, 6].map((n) => [n, String(n)]), S.decimals)}
+    </div>
+    <button class="btn" id="btn-calc" type="button">محاسبه</button>
+    <div id="result" class="stack"></div>
+    <button class="btn" id="btn-save" type="button">ثبت معامله</button>
+    <div class="row">
+      <button class="btn ghost" id="btn-new" type="button">معامله جدید</button>
+      <button class="btn ghost" id="btn-clear" type="button">پاک کردن فرم</button>
+    </div>
+    <div id="confirm"></div>
+    <details class="card">
+      <summary>نمونه‌های آماده برای تست</summary>
+      <div class="chips" id="samples">
+        <button type="button" data-s="spread">اختلاف ریت: ۱۰۰۰ × ۳.۶۸ و ۳.۶۹ (سود ۱۰)</button>
+        <button type="button" data-s="fee">کارمزد: ۰.۲٪ اضافه و ۰.۱٪ کسر (سود منفی)</button>
+        <button type="button" data-s="neg">مبلغ منفی: -5</button>
+        <button type="button" data-s="amb">ویرگول مبهم: 3,685</button>
+        <button type="button" data-s="partial">ورودی ناقص: «0.»</button>
+        <button type="button" data-s="comma">ویرگول اعشاری: 3,68</button>
+      </div>
+    </details>`;
+  NUM_KEYS.forEach((k) => { const el = $('f-' + k); if (el) el.value = S.form[k]; });
+}
+
+function syncInputs() { NUM_KEYS.forEach((k) => { const el = $('f-' + k); if (el) el.value = S.form[k]; }); ['origin', 'dest'].forEach((k) => { const el = $('f-' + k); if (el) el.value = S.form[k]; }); }
+
+function resultHtml(r, ms) {
+  const d = S.decimals; const m = (v) => money(v, d);
+  const cls = sign(r.profit) > 0 ? 'pos' : sign(r.profit) < 0 ? 'neg' : '';
+  const lv = (k, v, extra = '') => `<div class="lv"><span class="k">${k}</span><span class="v ${extra}">${esc(v)}</span></div>`;
+  const effLabel = { ADDED: 'اضافه به مبلغ تسویه', DEDUCTED: 'کسر از مبلغ تسویه', NO_CHANGE: 'بدون تغییر در مبلغ تسویه' };
+  let rows = lv('حالت', `${r.mode === 'FEE' ? 'کارمزد' : 'اختلاف ریت'} / ${r.method === 'MULTIPLY' ? 'ضرب' : 'تقسیم'}`) +
+    lv('مبلغ', `${money(r.amount, Math.max(d, exactScale(r.amount)))} ${r.origin}`);
+  if (r.mode === 'FEE') {
+    rows += lv('ریت پایه', plain(r.buyRate)) + lv('مبلغ پایه', `${m(r.base)} ${r.dest}`) +
+      lv(`کارمزد فروشنده (${effLabel[r.sellerEffect]})`, `${plain(r.sellerPercent)}٪ = ${m(r.sellerFee)} ${r.dest}`) +
+      lv(`هزینه خریدار (${effLabel[r.buyerEffect]})`, `${plain(r.buyerPercent)}٪ = ${m(r.buyerFee)} ${r.dest}`);
+  } else {
+    rows += lv('ریت خرید از فروشنده', plain(r.buyRate)) + lv('ریت فروش به خریدار', plain(r.sellRate));
+  }
+  rows += '<hr>' + lv('پرداخت به فروشنده', `${m(r.payToSeller)} ${r.dest}`) + lv('دریافت از خریدار', `${m(r.receiveFromBuyer)} ${r.dest}`) +
+    `<div class="lv profit ${cls}"><span>${sign(r.profit) < 0 ? 'زیان' : 'سود'}</span><span class="v">${esc(m(r.profit))} ${esc(r.dest)}</span></div>`;
+  const useMs = ms;
+  return `<div class="card"><h3>نتیجه</h3>${rows}</div>` +
+    `<div class="card"><h3>پیام برای فروشنده (BUY)</h3><pre class="msg" id="m-buy">${esc(buyMsg(r, d, useMs))}</pre><button class="btn ghost" type="button" data-copy="m-buy">Copy</button></div>` +
+    `<div class="card"><h3>پیام برای خریدار (SELL)</h3><pre class="msg" id="m-sell">${esc(sellMsg(r, d, useMs))}</pre><button class="btn ghost" type="button" data-copy="m-sell">Copy</button></div>`;
+}
+
+function updateCalc() {
+  NUM_KEYS.forEach((k) => { const e = $('e-' + k), i = $('f-' + k); if (e) e.textContent = ''; if (i) i.classList.remove('bad'); });
+  const fc = freshCalc();
+  let html = '';
+  if (fc && !fc.out.ok) {
+    fc.out.errors.forEach(({ field, reason }) => { const e = $('e-' + field), i = $('f-' + field); if (e) e.textContent = REASONS[reason]; if (i) i.classList.add('bad'); });
+    html = '<div class="err" style="display:block;font-size:13px">فیلدهای مشخص‌شده را اصلاح کن.</div>';
+  } else if (fc && fc.out.ok) {
+    html = resultHtml(fc.out.r, fc.at);
+  } else if (S.calc) {
+    html = '<div class="sub">ورودی‌ها تغییر کرده؛ دوباره «محاسبه» را بزن.</div>';
+  }
+  $('result').innerHTML = html;
+  const canSave = !!(fc && fc.out.ok && S.savedSnap !== snap());
+  const already = !!(fc && fc.out.ok && S.savedSnap === snap());
+  const sb = $('btn-save'); sb.disabled = !canSave; sb.textContent = already ? 'ثبت شد ✓' : 'ثبت معامله';
+  $('btn-clear').disabled = !hasNumericInput();
+}
+
+function showConfirm(kind) {
+  S.confirm = kind;
+  const box = $('confirm');
+  const texts = {
+    clear: ['پاک کردن فرم', 'اعداد واردشده پاک می‌شوند (ارزها و حالت‌ها می‌مانند). معاملات ثبت‌شده تغییری نمی‌کنند.', 'پاک کن'],
+    new: ['معامله جدید', 'این معامله هنوز ثبت نشده است. با شروع معامله جدید ورودی‌های فعلی از بین می‌روند.', 'ادامه'],
+  };
+  const [t, body, ok] = texts[kind];
+  box.innerHTML = `<div class="confirm"><strong>${t}</strong><div>${body}</div><div class="row"><button class="btn danger" type="button" id="c-ok">${ok}</button><button class="btn ghost" type="button" id="c-cancel">انصراف</button></div></div>`;
+  $('c-cancel').onclick = () => { S.confirm = null; box.innerHTML = ''; };
+  $('c-ok').onclick = () => { S.confirm = null; box.innerHTML = ''; kind === 'clear' ? doClear() : doNew(); };
+}
+function doClear() { NUM_KEYS.forEach((k) => { S.form[k] = ''; }); S.calc = null; persistDraft(); syncInputs(); updateCalc(); }
+function doNew() { S.form = { ...INITIAL }; S.calc = null; S.savedSnap = null; persistDraft(); buildForm(); bindForm(); updateCalc(); }
+
+function doCalculate() { const out = calculate(S.form); S.calc = { snap: snap(), out, at: Date.now() }; updateCalc(); const err = document.querySelector('#view-calc input.bad'); if (err) err.focus({ preventScroll: false }); }
+function doSave() {
+  const fc = freshCalc(); if (!fc || !fc.out.ok || S.savedSnap === snap()) return;
+  S.savedSnap = snap();
+  S.history.unshift({ id: S.nextId++, createdAt: Date.now(), result: fc.out.r });
+  persistHistory(); dbSave(S.history[0]); toast('معامله ثبت شد'); updateCalc();
+}
+
+function bindForm() {
+  const root = $('view-calc');
+  const inputs = [...root.querySelectorAll('input[data-key]')];
+  inputs.forEach((el, idx) => {
+    el.addEventListener('input', () => {
+      const raw = el.value; const f = filterTyping(raw);
+      if (f !== raw) { const pos = Math.max(0, (el.selectionStart ?? raw.length) - (raw.length - f.length)); el.value = f; el.setSelectionRange(pos, pos); }
+      S.form[el.dataset.key] = f; persistDraft(); updateCalc();
+    });
+    el.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return; e.preventDefault();
+      if (idx < inputs.length - 1) inputs[idx + 1].focus(); else { el.blur(); doCalculate(); }
+    });
+  });
+  ['origin', 'dest'].forEach((k) => { $('f-' + k).addEventListener('change', (e) => { S.form[k] = e.target.value; persistDraft(); updateCalc(); }); });
+  root.querySelectorAll('.chips[data-group]').forEach((g) => g.addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return; const grp = g.dataset.group; const v = b.dataset.v;
+    if (grp === 'decimals') { S.decimals = Number(v); } else { S.form[grp] = v; }
+    persistDraft();
+    if (grp === 'mode') { buildForm(); bindForm(); } else { g.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); }
+    updateCalc();
+  }));
+  $('btn-calc').onclick = doCalculate;
+  $('btn-save').onclick = doSave;
+  $('btn-clear').onclick = () => showConfirm('clear');
+  $('btn-new').onclick = () => { if (hasNumericInput() && S.savedSnap !== snap()) showConfirm('new'); else doNew(); };
+  $('result').addEventListener('click', (e) => { const b = e.target.closest('[data-copy]'); if (b) copyText($(b.dataset.copy).textContent); });
+  $('samples').addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return; const s = b.dataset.s;
+    const base = { ...INITIAL };
+    const presets = {
+      spread: { mode: 'SPREAD', amount: '1000', buyRate: '3.68', sellRate: '3.69' },
+      fee: { mode: 'FEE', amount: '1000000', baseRate: '3.67', sellerPercent: '0.2', sellerEffect: 'ADDED', buyerPercent: '0.1', buyerEffect: 'DEDUCTED' },
+      neg: { mode: 'FEE', amount: '-5', baseRate: '2' },
+      amb: { mode: 'FEE', amount: '1000', baseRate: '3,685' },
+      partial: { mode: 'FEE', amount: '0.', baseRate: '3.' },
+      comma: { mode: 'FEE', amount: '1000', baseRate: '3,68', sellerPercent: '0.75', buyerPercent: '1,25', sellerEffect: 'ADDED', buyerEffect: 'ADDED' },
+    };
+    S.form = { ...base, ...presets[s] }; S.calc = null; S.savedSnap = null; persistDraft(); buildForm(); bindForm(); updateCalc();
+    if (s !== 'partial') doCalculate(); window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+}
+
+/* ---------- سوابق ---------- */
+function sumHtml() {
+  const rows = exportRows(S.history); const by = new Map();
+  rows.forEach((r) => by.set(r.currency, add(by.get(r.currency) || ZERO, r.fee)));
+  const parts = [...by].map(([c, v]) => `<div class="lv"><span class="k">جمع مبلغ کارمزد</span><span class="v">${esc(money(v, S.decimals))} ${esc(c)}</span></div>`).join('');
+  return `<div class="card"><h3>خلاصه (مطابق ردیف‌های Excel)</h3>${parts}<div class="lv"><span class="k">تعداد معاملات</span><span class="v">${rows.length}</span></div></div>`;
+}
+function saveXlsx() {
+  if (!S.history.length) return;
+  try {
+    const blob = new Blob([buildXlsx(S.history)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob); const a = document.createElement('a');
+    a.href = url; a.download = 'FxTrade-' + new Date().toISOString().slice(0, 10) + '.xlsx'; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000); toast('فایل Excel ساخته شد');
+  } catch (e) { toast('ساخت فایل انجام نشد'); }
+}
+function renderHistory() {
+  const v = $('view-hist');
+  if (S.detailId != null) {
+    const t = S.history.find((x) => x.id === S.detailId);
+    if (!t) { S.detailId = null; return renderHistory(); }
+    v.innerHTML = `<button class="btn ghost" id="h-back" type="button">بازگشت به سوابق</button><div class="sub">زمان ثبت: <span dir="ltr">${fmtTime(t.createdAt)}</span></div>` +
+      resultHtml(t.result, t.createdAt) + `<button class="btn danger" id="h-del" type="button">حذف این سابقه</button><div id="h-confirm"></div>`;
+    $('h-back').onclick = () => { S.detailId = null; renderHistory(); };
+    $('h-del').onclick = () => {
+      $('h-confirm').innerHTML = `<div class="confirm"><strong>حذف سابقه</strong><div>این سابقه برای همیشه حذف می‌شود و قابل بازگشت نیست.</div><div class="row"><button class="btn danger" id="hc-ok" type="button">حذف</button><button class="btn ghost" id="hc-no" type="button">انصراف</button></div></div>`;
+      $('hc-no').onclick = () => { $('h-confirm').innerHTML = ''; };
+      $('hc-ok').onclick = () => { S.history = S.history.filter((x) => x.id !== t.id); persistHistory(); dbDelete(t.id); S.detailId = null; toast('سابقه حذف شد'); renderHistory(); };
+    };
+    v.onclick = (e) => { const b = e.target.closest('[data-copy]'); if (b) copyText($(b.dataset.copy).textContent); };
+    return;
+  }
+  v.onclick = null; v.onchange = null;
+  const list = S.history.map((t) => {
+    const r = t.result; const cls = sign(r.profit) > 0 ? 'good' : sign(r.profit) < 0 ? 'bad' : '';
+    return `<button class="hist" type="button" data-id="${t.id}"><span class="t">${fmtTime(t.createdAt)}</span><span class="l">${esc(money(r.amount, Math.max(S.decimals, exactScale(r.amount))))} ${esc(r.origin)} → ${esc(r.dest)}</span><span class="l profit ${sign(r.profit) > 0 ? 'pos' : sign(r.profit) < 0 ? 'neg' : ''}">${sign(r.profit) < 0 ? 'زیان' : 'سود'}: ${esc(money(r.profit, S.decimals))} ${esc(r.dest)}</span></button>`;
+  }).join('');
+  v.innerHTML = `<div class="row" style="align-items:center"><span>${S.history.length} معامله ثبت‌شده</span><span class="badge ${dbState}" id="dbstate"></span></div>` +
+    `<div class="row"><button class="btn" id="h-xlsx" type="button" ${S.history.length ? '' : 'disabled'}>خروجی Excel</button><button class="btn ghost" id="h-csv" type="button" ${S.history.length ? '' : 'disabled'}>کپی CSV</button></div>` +
+    (S.history.length ? sumHtml() + list : '<div class="card sub">هنوز معامله‌ای ثبت نشده است.</div>');
+  setDbBadge();
+  $('h-csv').onclick = () => copyText(buildCsv(S.history));
+  $('h-xlsx').onclick = saveXlsx;
+  v.querySelectorAll('.hist').forEach((b) => { b.onclick = () => { S.detailId = Number(b.dataset.id); renderHistory(); }; });
+}
+
+function setTab(tab) {
+  S.tab = tab;
+  $('tab-calc').setAttribute('aria-selected', String(tab === 'calc')); $('tab-hist').setAttribute('aria-selected', String(tab === 'hist'));
+  $('view-calc').hidden = tab !== 'calc'; $('view-hist').hidden = tab !== 'hist';
+  if (tab === 'hist') { S.detailId = null; renderHistory(); }
+}
+$('tab-calc').onclick = () => setTab('calc');
+$('tab-hist').onclick = () => setTab('hist');
+
+buildForm(); bindForm(); updateCalc(); initDb();
+if ('serviceWorker' in navigator) window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); });
+</script>
+</body>
+</html>
