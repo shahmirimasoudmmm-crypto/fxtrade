@@ -98,9 +98,10 @@
 .tabs { grid-template-columns: 1fr 1fr 1fr !important; }
   .pos { color: var(--good); } .neg, td.neg { color: var(--bad); }
   .tw { overflow-x: auto; }
-  table { border-collapse: collapse; width: 100%; font-size: 12.5px; font-variant-numeric: tabular-nums; }
-  th, td { padding: 6px 6px; border-bottom: 1px solid var(--line); text-align: start; white-space: nowrap; }
+  table { border-collapse: collapse; width: 100%; font-size: 11.5px; font-variant-numeric: tabular-nums; }
+  th, td { padding: 6px 4px; border-bottom: 1px solid var(--line); text-align: start; white-space: nowrap; }
   th { color: var(--muted); font-weight: 500; }
+  td:not(:first-child) { direction: ltr; text-align: right; }
   input[type="datetime-local"] { font: inherit; color: var(--ink); background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; width: 100%; min-width: 0; }
 .badge{font-size:12px;padding:3px 8px;border-radius:999px;border:1px solid var(--line,#8884);white-space:nowrap}.badge.cloud{color:#0a7a3d;border-color:#0a7a3d}.badge.error{color:#b3261e;border-color:#b3261e}
 </style>
@@ -117,7 +118,7 @@
   <div class="tabs" role="tablist">
     <button id="tab-calc" role="tab" aria-selected="true">ماشین‌حساب</button>
     <button id="tab-hist" role="tab" aria-selected="false">سوابق</button>
-    <button id="tab-pos" role="tab" aria-selected="false">موجودی شخصی</button>
+    <button id="tab-pos" role="tab" aria-selected="false">منابع شخصی</button>
   </div>
 
   <div id="view-calc" class="stack"></div>
@@ -433,15 +434,23 @@ function buildXlsx(trades) {
 }
 </script>
 <script id="ledger">
-/* ===== دفتر موجودی شخصی: FIFO، تعهد باز، سود تحقق‌یافته (فقط منطق؛ بدون DOM) ===== */
-const REP = 'USD CASH THR'; // ارز گزارش سود
+/* ===== معامله از منابع شخصی: دفتر ساده اسناد (بدون FIFO، بدون محاسبهٔ خودکار سود) ===== */
 const LEDGER_CUR = ['USD NRA', 'USD CASH THR', 'USD CASH TUR', 'AED', 'AED CASH', 'CNY NRA', 'EUR NRA', 'EUR CASH THR', 'EUR CASH TUR', 'USDT', 'IRR', 'IRT'];
-const FEE_MODES = ['DEDUCT', 'ADD_COST', 'EXTRA']; // کسر از دریافتی | اضافه به هزینه پرداختی | دریافتی اضافه
+const FEE_EFFECTS = ['ADDED', 'DEDUCTED', 'NO_CHANGE'];
 
-/* ورودی متنی ← عدد دقیق یا خطا. kind: 'positive' | 'nonneg' | 'optional' (خالی = null) */
-function ledgerNum(raw, kind) {
+/* ارز جدید: حروف/ارقام (هر زبان)، فاصله، خط تیره و زیرخط؛ ۲ تا ۲۰ نویسه؛ حروف لاتین بزرگ می‌شوند؛ تکراری (بدون توجه به بزرگی/کوچکی) رد می‌شود */
+function normalizeCurrency(raw, existing) {
+  const s = String(raw ?? '').normalize('NFKC').replace(/\s+/g, ' ').trim().toUpperCase();
+  if (s.length < 2) return { err: 'نام ارز باید دست‌کم ۲ نویسه باشد' };
+  if (s.length > 20) return { err: 'نام ارز بیش از ۲۰ نویسه است' };
+  if (!/^[\p{L}\p{N}][\p{L}\p{N} _-]*$/u.test(s)) return { err: 'فقط حروف، ارقام، فاصله، - و _ مجاز است' };
+  if ((existing || LEDGER_CUR).some((c) => c.toUpperCase() === s)) return { err: 'این ارز قبلاً تعریف شده است' };
+  return { ok: true, name: s };
+}
+
+function docNum(raw, kind) { // kind: 'positive' | 'nonneg' (خالی = صفر)
   const p = parseDetailed(String(raw ?? ''));
-  if (p.k === 'empty') return kind === 'optional' ? { v: null } : kind === 'nonneg' ? { v: ZERO } : { err: 'EMPTY' };
+  if (p.k === 'empty') return kind === 'nonneg' ? { v: ZERO } : { err: 'EMPTY' };
   if (p.k === 'invalid') return { err: 'INVALID' };
   if (p.k === 'ambiguous') return { err: 'AMBIGUOUS_COMMA' };
   if (sign(p.v) < 0) return { err: 'NEGATIVE' };
@@ -449,135 +458,145 @@ function ledgerNum(raw, kind) {
   return { v: p.v };
 }
 
-/* اعتبارسنجی فرم ← { ok, entry } یا { ok:false, errors:[{field, reason}] } ؛ مقادیر عددی به رشتهٔ دقیق نرمال می‌شوند */
-function validateEntry(f) {
+/* اعتبارسنجی فرم ← { ok, doc } یا { ok:false, errors }؛ اعداد به رشتهٔ دقیق نرمال می‌شوند */
+function validateDoc(f) {
   const errors = []; const out = { type: f.type, ts: f.ts, note: String(f.note || '').trim() };
-  const need = (field, kind) => { const r = ledgerNum(f[field], kind); if (r.err) { errors.push({ field, reason: r.err }); return null; } return r.v; };
+  const need = (field, kind) => { const r = docNum(f[field], kind); if (r.err) { errors.push({ field, reason: r.err }); return null; } return r.v; };
   const cur = (field) => { if (!LEDGER_CUR.includes(f[field])) { errors.push({ field, reason: 'BAD_CUR' }); return null; } return f[field]; };
   if (!Number.isFinite(f.ts)) errors.push({ field: 'ts', reason: 'BAD_DATE' });
   if (f.type === 'convert') {
-    const from = cur('from'); const to = cur('to');
-    if (from && to && from === to) errors.push({ field: 'to', reason: 'SAME_CUR' });
-    const amount = need('amount', 'positive'); const rate = need('rate', 'positive');
-    const fee = need('feeValue', 'nonneg'); const actual = need('actual', 'optional'); const val = need('toThrRate', 'optional');
-    if (actual && sign(actual) === 0) errors.push({ field: 'actual', reason: 'NOT_POSITIVE' });
-    if (val && sign(val) === 0) errors.push({ field: 'toThrRate', reason: 'NOT_POSITIVE' });
-    const unit = f.feeUnit === 'permille' ? 'permille' : 'percent';
-    const method = f.method === 'DIVIDE' ? 'DIVIDE' : 'MULTIPLY';
-    const mode = FEE_MODES.includes(f.feeMode) ? f.feeMode : 'DEDUCT';
-    if (fee && sign(fee) > 0) {
-      const pct = unit === 'permille' ? movePointLeft(fee, 1) : fee;
-      if (mode === 'DEDUCT' && cmp(pct, D(100n, 0)) >= 0) errors.push({ field: 'feeValue', reason: 'FEE_TOO_BIG' });
-    }
+    const from = cur('from'); const to = cur('to'); if (from && to && from === to) errors.push({ field: 'to', reason: 'SAME_CUR' });
+    const paid = need('paid', 'positive'); const received = String(f.received ?? '').trim() === '' ? null : need('received', 'positive'); const rate = need('rate', 'positive');
+    const fee = need('feeValue', 'nonneg'); const profit = need('profit', 'nonneg'); const loss = need('loss', 'nonneg');
+    if (profit && loss && sign(profit) > 0 && sign(loss) > 0) errors.push({ field: 'loss', reason: 'BOTH_PL' });
     if (errors.length) return { ok: false, errors };
-    Object.assign(out, { from, to, amount: plain(amount), rate: plain(rate), method, feeValue: plain(fee), feeUnit: unit, feeMode: mode,
-      actual: actual ? plain(actual) : '', toThrRate: val ? plain(val) : '' });
-  } else if (f.type === 'initial' || f.type === 'settle') {
-    const c = cur('cur'); const amount = need('amount', 'positive'); const uc = need('unitCost', 'optional');
+    Object.assign(out, { from, to, paid: plain(paid), received: received ? plain(received) : '', rate: plain(rate), method: f.method === 'DIVIDE' ? 'DIVIDE' : 'MULTIPLY',
+      feeValue: plain(fee), feeUnit: f.feeUnit === 'percent' ? 'percent' : 'permille', feeEffect: FEE_EFFECTS.includes(f.feeEffect) ? f.feeEffect : 'NO_CHANGE', profit: plain(profit), loss: plain(loss) });
+  } else if (f.type === 'deposit') {
+    const c = cur('cur'); const amount = need('amount', 'positive'); const profit = need('profit', 'nonneg'); const loss = need('loss', 'nonneg');
+    if (profit && loss && sign(profit) > 0 && sign(loss) > 0) errors.push({ field: 'loss', reason: 'BOTH_PL' });
     if (errors.length) return { ok: false, errors };
-    Object.assign(out, { cur: c, amount: plain(amount), unitCost: c === REP ? '1' : (uc ? plain(uc) : '') });
+    Object.assign(out, { cur: c, amount: plain(amount), profit: plain(profit), loss: plain(loss) });
   } else return { ok: false, errors: [{ field: 'type', reason: 'BAD_TYPE' }] };
-  return { ok: true, entry: out };
+  return { ok: true, doc: out };
 }
 
-const dec = (s) => (s === '' || s == null ? null : fromPlain(s));
-const feePercent = (e) => { const v = dec(e.feeValue) || ZERO; return e.feeUnit === 'permille' ? movePointLeft(v, 1) : v; };
+const dd = (s) => (s === '' || s == null ? ZERO : fromPlain(s));
+const dmin = (a, b) => (cmp(a, b) <= 0 ? a : b);
+const feePct = (d) => (d.feeUnit === 'permille' ? movePointLeft(dd(d.feeValue), 1) : dd(d.feeValue));
+/* مبلغ کارمزد/هزینه به ارز مقصد: مبلغ پرداختی تبدیل‌شده با نرخ × درصد. فقط اطلاعاتی است؛ روی موجودی و سود اثر ندارد. */
+function feeAmountOf(d) {
+  const pct = feePct(d); if (sign(pct) === 0) return ZERO;
+  const base = d.method === 'DIVIDE' ? divide(dd(d.paid), dd(d.rate)) : mul(dd(d.paid), dd(d.rate));
+  return movePointLeft(mul(base, pct), 2);
+}
 
-/* محاسبهٔ کامل از روی دفتر. entries: آرایه با id و ts. خروجی فقط به entries بستگی دارد (بازپخش کامل). */
-function replayLedger(entries) {
-  const sorted = [...entries].sort((a, b) => a.ts - b.ts || a.id - b.id);
-  const lots = Object.fromEntries(LEDGER_CUR.map((c) => [c, []]));
-  const obls = Object.fromEntries(LEDGER_CUR.map((c) => [c, []]));
-  const results = {}; let realized = ZERO; let unknownCount = 0; let seq = 0;
-  const sumRem = (c) => lots[c].reduce((s, l) => add(s, l.remaining), ZERO);
+/* مبلغ دریافتی: اگر کاربر مبلغ واقعی وارد کرده همان؛ وگرنه مبلغ × نرخ (یا ÷ نرخ) و سپس اثر کارمزد: اضافه / کسر / بدون تغییر */
+function grossOf(d) { return d.method === 'DIVIDE' ? divide(dd(d.paid), dd(d.rate)) : mul(dd(d.paid), dd(d.rate)); }
+function receivedOf(d) {
+  if (d.received !== '' && d.received != null) return dd(d.received);
+  const g = grossOf(d); const fee = feeAmountOf(d);
+  return d.feeEffect === 'ADDED' ? add(g, fee) : d.feeEffect === 'DEDUCTED' ? sub(g, fee) : g;
+}
 
-  // ورود ارز: ابتدا تعهد باز همان ارز (قدیمی‌ترین اول)، فقط مازاد وارد موجودی واقعی می‌شود
-  function inflow(cur, amount, unitCost, e, res) {
-    let rem = amount;
-    for (const ob of obls[cur]) {
-      if (sign(rem) === 0) break;
-      if (sign(ob.remaining) === 0) continue;
-      const take = cmp(rem, ob.remaining) < 0 ? rem : ob.remaining;
-      ob.remaining = sub(ob.remaining, take); rem = sub(rem, take);
-      res.settled.push({ obId: ob.id, amount: take });
-      res.settledTotal = add(res.settledTotal, take);
-      if (ob.proceedsPerUnit && unitCost) res.realizedParts.push(sub(mul(take, ob.proceedsPerUnit), mul(take, unitCost)));
-      else res.realizedParts.push(null);
-    }
-    if (sign(rem) > 0) { lots[cur].push({ id: ++seq, entryId: e.id, ts: e.ts, source: e.type, cur, amount0: rem, remaining: rem, unitCost }); res.toBalance = add(res.toBalance, rem); }
+/* بازپخش کامل دفتر؛ خروجی فقط به اسناد بستگی دارد */
+function replayDocs(docs) {
+  docs.forEach((d) => [d.from, d.to, d.cur].forEach((c) => { if (c && !LEDGER_CUR.includes(c)) LEDGER_CUR.push(c); })); // ارز ناشناختهٔ سند هیچ‌وقت دور ریخته نمی‌شود
+  const sorted = [...docs].sort((a, b) => a.ts - b.ts || a.id - b.id);
+  const bal = {}, obl = {}, prof = {}, loss = {}, feeAdd = {}, feeDed = {};
+  LEDGER_CUR.forEach((c) => { feeAdd[c] = ZERO; feeDed[c] = ZERO; bal[c] = ZERO; obl[c] = ZERO; prof[c] = ZERO; loss[c] = ZERO; });
+  const results = {};
+  // دریافت ارز: اول تعهد باز همان ارز؛ فقط مازاد به موجودی؛ سود/زیان دستی از مازاد/باقی‌ماندهٔ تعهد
+  function credit(cur, amount, d, res) {
+    const hadObl = sign(obl[cur]) > 0;
+    const settle = dmin(amount, obl[cur]); obl[cur] = sub(obl[cur], settle); let rest = sub(amount, settle);
+    res.settled = settle; res.maxProfit = hadObl ? rest : ZERO; res.maxLoss = hadObl ? obl[cur] : ZERO;
+    let P = dd(d.profit), Q = dd(d.loss);
+    if (cmp(P, res.maxProfit) > 0) { P = res.maxProfit; res.warn = 'مبلغ سود واردشده بیش از مازاد تسویه بود و به حداکثر مجاز کاهش یافت.'; }
+    if (cmp(Q, res.maxLoss) > 0) { Q = res.maxLoss; res.warn = 'مبلغ زیان واردشده بیش از باقی‌ماندهٔ تعهد بود و به حداکثر مجاز کاهش یافت.'; }
+    rest = sub(rest, P); obl[cur] = sub(obl[cur], Q); bal[cur] = add(bal[cur], rest);
+    prof[cur] = add(prof[cur], P); loss[cur] = add(loss[cur], Q);
+    res.profit = P; res.loss = Q; res.toBalance = rest; res.cur = cur;
   }
-  const newRes = (e) => ({ entryId: e.id, type: e.type, consumed: [], shortfall: ZERO, settled: [], settledTotal: ZERO, toBalance: ZERO, realizedParts: [], realized: ZERO, realizedKnown: true });
-
-  for (const e of sorted) {
-    const res = newRes(e); results[e.id] = res;
-    if (e.type === 'initial' || e.type === 'settle') {
-      const c = e.cur; const amount = dec(e.amount); const uc = c === REP ? D(1n, 0) : dec(e.unitCost);
-      res.received = amount; res.receivedCur = c;
-      if (e.type === 'settle' && !obls[c].some((o) => sign(o.remaining) > 0)) res.note = 'تعهد بازی برای این ارز نبود؛ کل مبلغ به موجودی افزوده شد.';
-      inflow(c, amount, uc, e, res);
-    } else {
-      const amount = dec(e.amount); const rate = dec(e.rate); const pct = feePercent(e); const hasFee = sign(pct) > 0;
-      const gross = e.method === 'DIVIDE' ? divide(amount, rate) : mul(amount, rate);
-      let fee = ZERO; let paid = amount; let est = gross;
-      if (hasFee) {
-        if (e.feeMode === 'ADD_COST') { fee = movePointLeft(mul(amount, pct), 2); paid = add(amount, fee); }
-        else { fee = movePointLeft(mul(gross, pct), 2); est = e.feeMode === 'DEDUCT' ? sub(gross, fee) : add(gross, fee); }
-      }
-      const actual = dec(e.actual); const received = actual || est;
-      Object.assign(res, { paid, estimated: est, received, receivedKind: actual ? 'actual' : 'computed', fee, feeCur: e.feeMode === 'ADD_COST' ? e.from : e.to, gross });
-      if (actual && cmp(actual, est) !== 0) res.note = 'مبلغ واقعی با مقدار محاسبه‌شده از نرخ و کارمزد فرق دارد؛ مبلغ واقعی ملاک است.';
-      // ارزش دریافتی به دلار تهران (برای بهای لات جدید و سود)
-      const toVal = dec(e.toThrRate);
-      let proceedsThr = null;
-      if (e.to === REP) proceedsThr = received; else if (toVal) proceedsThr = mul(received, toVal); else if (e.from === REP) proceedsThr = paid;
-      // مصرف FIFO
-      let need = paid; let costKnown = true; let cost = ZERO;
-      for (const l of lots[e.from]) {
-        if (sign(need) === 0) break; if (sign(l.remaining) === 0) continue;
-        const take = cmp(need, l.remaining) < 0 ? need : l.remaining;
-        l.remaining = sub(l.remaining, take); need = sub(need, take);
-        let c = null; if (l.unitCost) { c = mul(take, l.unitCost); cost = add(cost, c); } else costKnown = false;
-        res.consumed.push({ lotId: l.id, amount: take, cost: c });
-      }
-      res.shortfall = need; res.paidFromBalance = sub(paid, need);
-      if (sign(need) > 0) {
-        obls[e.from].push({ id: ++seq, entryId: e.id, ts: e.ts, cur: e.from, amount0: need, remaining: need, proceedsPerUnit: proceedsThr ? divide(proceedsThr, paid) : null });
-      }
-      if (sign(res.paidFromBalance) > 0) {
-        if (proceedsThr && costKnown) res.realizedParts.push(sub(mul(proceedsThr, divide(res.paidFromBalance, paid)), cost)); else res.realizedParts.push(null);
-      }
-      res.cost = costKnown ? cost : null; res.proceedsThr = proceedsThr;
-      const unitCost = e.to === REP ? D(1n, 0) : (proceedsThr ? divide(proceedsThr, received) : null);
-      inflow(e.to, received, unitCost, e, res);
-    }
-    // جمع سود این عملیات
-    for (const p of res.realizedParts) { if (p === null) res.realizedKnown = false; else res.realized = add(res.realized, p); }
-    if (res.realizedParts.length === 0) res.realizedKnown = true;
-    realized = add(realized, res.realized); if (!res.realizedKnown) unknownCount++;
+  for (const d of sorted) {
+    const res = { docId: d.id, type: d.type, settled: ZERO, profit: ZERO, loss: ZERO, toBalance: ZERO, paidFromBalance: ZERO, shortfall: ZERO, maxProfit: ZERO, maxLoss: ZERO };
+    results[d.id] = res;
+    if (d.type === 'convert') {
+      const paid = dd(d.paid); const take = dmin(paid, bal[d.from]);
+      bal[d.from] = sub(bal[d.from], take); res.paidFromBalance = take; res.shortfall = sub(paid, take); obl[d.from] = add(obl[d.from], res.shortfall);
+      res.fee = feeAmountOf(d); res.received = receivedOf(d); res.receivedKind = d.received !== '' && d.received != null ? 'actual' : 'computed'; res.computed = (() => { const g = grossOf(d); return d.feeEffect === 'ADDED' ? add(g, res.fee) : d.feeEffect === 'DEDUCTED' ? sub(g, res.fee) : g; })(); credit(d.to, res.received, d, res); if (d.feeEffect === 'ADDED') feeAdd[d.to] = add(feeAdd[d.to], res.fee); else if (d.feeEffect === 'DEDUCTED') feeDed[d.to] = add(feeDed[d.to], res.fee);
+    } else credit(d.cur, dd(d.amount), d, res);
   }
-  const balances = LEDGER_CUR.map((c) => {
-    const real = sumRem(c); const open = obls[c].reduce((s, o) => add(s, o.remaining), ZERO);
-    let cost = ZERO; let unknown = false; lots[c].forEach((l) => { if (sign(l.remaining) === 0) return; if (l.unitCost) cost = add(cost, mul(l.remaining, l.unitCost)); else unknown = true; });
-    return { cur: c, real, open, net: sub(real, open), cost, costUnknown: unknown };
-  });
-  return { sorted, lots, obls, results, balances, realized, unknownCount };
+  const balances = LEDGER_CUR.map((c) => ({ cur: c, balance: bal[c], obligation: obl[c], net: sub(bal[c], obl[c]), profit: prof[c], loss: loss[c], feeAdded: feeAdd[c], feeDeducted: feeDed[c], pnl: sub(add(sub(prof[c], loss[c]), feeAdd[c]), feeDed[c]) }));
+  return { sorted, results, balances };
 }
 
-/* توضیح خطا برای فرم */
-const LEDGER_REASONS = Object.assign({}, typeof REASONS !== 'undefined' ? REASONS : {}, {
-  BAD_CUR: 'ارز نامعتبر است', SAME_CUR: 'ارز مبدأ و مقصد نباید یکی باشد', BAD_DATE: 'تاریخ نامعتبر است',
-  FEE_TOO_BIG: 'کارمزد کسری باید کمتر از ۱۰۰٪ باشد', BAD_TYPE: 'نوع عملیات نامعتبر است' });
+const DOC_REASONS = Object.assign({}, typeof REASONS !== 'undefined' ? REASONS : {}, {
+  BAD_CUR: 'ارز نامعتبر است', SAME_CUR: 'ارز مبدأ و مقصد نباید یکی باشد', BAD_DATE: 'تاریخ نامعتبر است', BAD_TYPE: 'نوع سند نامعتبر است',
+  BOTH_PL: 'در یک سند یا سود ثبت کن یا زیان، نه هر دو', OVER_PROFIT: 'بیش از مازاد تسویه است', OVER_LOSS: 'بیش از باقی‌ماندهٔ تعهد است' });
 
-function ledgerCsv(entries, rep) {
-  const q = (s) => csvEscape(String(s ?? ''));
-  const head = 'id,datetime,type,from,to,amount,rate,method,fee_value,fee_unit,fee_mode,actual_received,received,received_kind,paid,shortfall,settled,to_balance,realized_thb_usd,realized_known,note';
-  const rows = rep.sorted.map((e) => { const r = rep.results[e.id];
-    return [e.id, fmtTime(e.ts), e.type, e.from || e.cur || '', e.to || '', e.amount, e.rate || '', e.method || '', e.feeValue || '', e.feeUnit || '', e.feeMode || '', e.actual || '',
-      r.received ? plain(r.received) : '', r.receivedKind || '', r.paid ? plain(r.paid) : '', plain(r.shortfall), plain(r.settledTotal), plain(r.toBalance),
-      r.realizedKnown ? plain(r.realized) : '', r.realizedKnown ? 'yes' : 'no', e.note || ''].map(q).join(','); });
-  const bal = ['', 'currency,real_balance,open_obligation,net,cost_basis_thb_usd,cost_known'].concat(rep.balances.map((b) => [b.cur, plain(b.real), plain(b.open), plain(b.net), plain(b.cost), b.costUnknown ? 'no' : 'yes'].map(q).join(',')));
-  return [head, ...rows, ...bal, '', 'total_realized_thb_usd,' + plain(rep.realized), 'trades_with_unknown_profit,' + rep.unknownCount].join('\n');
+/* پیام قابل کپی برای اعلام بستن معامله (فقط یک پیام) */
+function closeMessage(d, decimals) {
+  const lines = ['DEAL CLOSED'];
+  const pdec = Math.max(decimals, exactScale(dd(d.paid))); const recv = receivedOf(d); const rdec = Math.max(decimals, exactScale(recv));
+  lines.push(`PAID: ${money(dd(d.paid), pdec)} (${d.from})`);
+  lines.push(`RATE: ${plain(dd(d.rate))}${d.method === 'DIVIDE' ? ' (DIVIDE)' : ''}`);
+  lines.push(`RECEIVED: ${money(recv, rdec)} (${d.to})`);
+  const fee = feeAmountOf(d);
+  if (sign(fee) > 0) lines.push(`FEE: ${plain(dd(d.feeValue))}${d.feeUnit === 'permille' ? '‰' : '%'} = ${money(fee, decimals)} (${d.to}) (${EFFECT_CODE[d.feeEffect]})`);
+  lines.push(`DATE: ${fmtTime(d.ts)}`);
+  return lines.join('\n');
 }
+
+/* ردیف‌های Excel: یک ردیف برای هر سند + خلاصهٔ هر ارز */
+function docRows(rep, docs) {
+  const byId = Object.fromEntries(docs.map((d) => [d.id, d])); const dec2 = (s) => dd(s);
+  return rep.sorted.map((d, i) => { const r = rep.results[d.id]; const cv = d.type === 'convert';
+    return { index: i + 1, ts: d.ts, kind: cv ? 'تبدیل ارز' : 'ثبت موجودی', payCur: cv ? d.from : '', pay: cv ? dd(d.paid) : null, getCur: cv ? d.to : d.cur, get: cv ? r.received : dd(d.amount),
+      rate: cv ? dd(d.rate) : null, fee: cv && sign(r.fee) > 0 ? r.fee : null, feeCur: cv && sign(r.fee) > 0 ? d.to : '', feeEffect: cv && sign(r.fee) > 0 ? EFFECT_CODE[d.feeEffect] : '',
+      shortfall: sign(r.shortfall) > 0 ? r.shortfall : null, settled: sign(r.settled) > 0 ? r.settled : null, profit: sign(r.profit) > 0 ? r.profit : null, loss: sign(r.loss) > 0 ? r.loss : null, note: d.note || '' }; });
+}
+
+/* مهاجرت: اسناد نسخهٔ قبلی (موتور FIFO) ← سند ساده. مقدار پرداختی/دریافتی از خود فیلدهای ثبت‌شده بازسازی می‌شود. */
+function legacyToDoc(e) {
+  const base = { id: e.id, ts: e.ts, note: e.note || '' };
+  if (e.type === 'initial' || e.type === 'settle') return { ...base, type: 'deposit', cur: e.cur, amount: e.amount, profit: '0', loss: '0' };
+  const amount = fromPlain(e.amount); const rate = fromPlain(e.rate); const v = e.feeValue ? fromPlain(e.feeValue) : ZERO;
+  const pct = e.feeUnit === 'permille' ? movePointLeft(v, 1) : v;
+  const gross = e.method === 'DIVIDE' ? divide(amount, rate) : mul(amount, rate);
+  let paid = amount, est = gross;
+  if (sign(pct) > 0) {
+    if (e.feeMode === 'ADD_COST') paid = add(amount, movePointLeft(mul(amount, pct), 2));
+    else { const fee = movePointLeft(mul(gross, pct), 2); est = e.feeMode === 'EXTRA' ? add(gross, fee) : sub(gross, fee); }
+  }
+  return { ...base, type: 'convert', from: e.from, to: e.to, paid: plain(paid), received: e.actual ? e.actual : plain(est), rate: e.rate, method: e.method === 'DIVIDE' ? 'DIVIDE' : 'MULTIPLY',
+    feeValue: e.feeValue || '0', feeUnit: e.feeUnit === 'percent' ? 'percent' : 'permille', feeEffect: sign(pct) > 0 ? (e.feeMode === 'DEDUCT' ? 'DEDUCTED' : 'ADDED') : 'NO_CHANGE', profit: '0', loss: '0' };
+}
+
+/* خروجی Excel فهرست اسناد + خلاصهٔ هر ارز */
+function buildDocsXlsx(docs) {
+  const rep = replayDocs(docs); const rows = docRows(rep, docs);
+  const col = (i) => String.fromCharCode(65 + i);
+  const S = (c, r, t, s) => `<c r="${col(c)}${r}" s="${s}" t="inlineStr"><is><t xml:space="preserve">${xmlEsc(t)}</t></is></c>`;
+  const N = (c, r, v, s) => `<c r="${col(c)}${r}" s="${s}"><v>${v}</v></c>`;
+  const num = (c, r, d, s = 4) => (d ? N(c, r, cellNumber(d), s) : '');
+  const heads = ['ردیف', 'تاریخ', 'نوع', 'ارز پرداختی', 'مبلغ پرداختی', 'ارز دریافتی', 'مبلغ دریافتی', 'نرخ', 'کارمزد/هزینه', 'ارز کارمزد', 'اثر کارمزد', 'کسری ← تعهد باز', 'تسویه تعهد', 'سود ثبت‌شده', 'زیان ثبت‌شده', 'یادداشت'];
+  let x = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView rightToLeft="1" workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="18"/>' +
+    '<cols><col min="1" max="1" width="7" customWidth="1"/><col min="2" max="2" width="17" customWidth="1"/><col min="3" max="3" width="12" customWidth="1"/><col min="4" max="16" width="16" customWidth="1"/><col min="16" max="16" width="30" customWidth="1"/></cols><sheetData>';
+  x += '<row r="1">' + heads.map((h, i) => S(i, 1, h, 1)).join('') + '</row>';
+  rows.forEach((r, i) => { const n = i + 2;
+    x += `<row r="${n}">` + N(0, n, r.index, 5) + N(1, n, excelDate(r.ts), 3) + S(2, n, r.kind, 2) + S(3, n, r.payCur, 2) + (r.pay ? num(4, n, r.pay) : S(4, n, '', 2)) + S(5, n, r.getCur, 2) + num(6, n, r.get) +
+      (r.rate ? num(7, n, r.rate) : S(7, n, '', 2)) + (r.fee ? num(8, n, r.fee) : S(8, n, '', 2)) + S(9, n, r.feeCur, 2) + S(10, n, r.feeEffect, 2) +
+      (r.shortfall ? num(11, n, r.shortfall) : S(11, n, '', 2)) + (r.settled ? num(12, n, r.settled) : S(12, n, '', 2)) + (r.profit ? num(13, n, r.profit) : S(13, n, '', 2)) + (r.loss ? num(14, n, r.loss) : S(14, n, '', 2)) + S(15, n, r.note, 2) + '</row>'; });
+  let row = rows.length + 3;
+  x += `<row r="${row}">` + S(2, row, 'تعداد اسناد', 6) + N(3, row, rows.length, 5) + '</row>'; row += 2;
+  const live = rep.balances.filter((b) => sign(b.balance) || sign(b.obligation) || sign(b.profit) || sign(b.loss) || sign(b.feeAdded) || sign(b.feeDeducted));
+  x += `<row r="${row}">` + ['ارز', 'موجودی', 'تعهد باز', 'مانده خالص', 'سود ثبت‌شده', 'زیان ثبت‌شده', 'کارمزد (اضافه)', 'هزینه (کسر)', 'سود و زیان خالص'].map((h, i) => S(i + 2, row, h, 1)).join('') + '</row>'; row++;
+  live.forEach((b) => { x += `<row r="${row}">` + S(2, row, b.cur, 2) + num(3, row, b.balance, 7) + num(4, row, b.obligation, 7) + num(5, row, b.net, 7) + num(6, row, b.profit, 7) + num(7, row, b.loss, 7) + num(8, row, b.feeAdded, 7) + num(9, row, b.feeDeducted, 7) + num(10, row, b.pnl, 7) + '</row>'; row++; });
+  x += '</sheetData></worksheet>';
+  return zipStore([{ name: '[Content_Types].xml', text: X_CONTENT_TYPES }, { name: '_rels/.rels', text: X_ROOT_RELS }, { name: 'xl/workbook.xml', text: X_WORKBOOK }, { name: 'xl/_rels/workbook.xml.rels', text: X_WORKBOOK_RELS }, { name: 'xl/styles.xml', text: X_STYLES }, { name: 'xl/worksheets/sheet1.xml', text: x }]);
+}
+
 </script>
 
 <script>
@@ -601,7 +620,7 @@ function deserializeTrade(t) { const r = { ...t.result }; RES_KEYS.forEach((k) =
 let IDB = null; let dbState = 'local'; // local | cloud | error
 let dbQueue = Promise.resolve();
 function setDbBadge() { const el = $('dbstate'); if (!el) return; el.textContent = dbState === 'cloud' ? 'ذخیره روی این گوشی ✓' : dbState === 'error' ? 'خطا در ذخیره؛ از Excel پشتیبان بگیر' : 'در حال آماده‌سازی…'; el.className = 'badge ' + dbState; }
-function idbOpen() { return new Promise((res, rej) => { const q = indexedDB.open('fxtrade', 2); q.onupgradeneeded = () => { const db = q.result; if (!db.objectStoreNames.contains('trades')) db.createObjectStore('trades', { keyPath: 'id' }); if (!db.objectStoreNames.contains('ledger')) db.createObjectStore('ledger', { keyPath: 'id' }); }; q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); }
+function idbOpen() { return new Promise((res, rej) => { const q = indexedDB.open('fxtrade', 3); q.onupgradeneeded = () => { const db = q.result; if (!db.objectStoreNames.contains('trades')) db.createObjectStore('trades', { keyPath: 'id' }); if (!db.objectStoreNames.contains('ledger')) db.createObjectStore('ledger', { keyPath: 'id' }); if (!db.objectStoreNames.contains('docs')) db.createObjectStore('docs', { keyPath: 'id' }); }; q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); }
 function idbTx(mode, fn, storeName = 'trades') { return new Promise((res, rej) => { const tx = IDB.transaction(storeName, mode); const r = fn(tx.objectStore(storeName)); tx.oncomplete = () => res(r && r.result); tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error); }); }
 function dbRun(fn) { if (!IDB) return; dbQueue = dbQueue.then(fn).catch(() => { dbState = 'error'; setDbBadge(); }); }
 function persistHistory() { store('fx.history', S.history.map(serializeTrade)); }
@@ -867,136 +886,169 @@ $('tab-calc').onclick = () => setTab('calc');
 $('tab-hist').onclick = () => setTab('hist');
 $('tab-pos').onclick = () => setTab('pos');
 
-/* ===================== بخش «معامله از موجودی شخصی» ===================== */
-const PS = { entries: [], form: null, detailId: null, showSpent: false, tried: false, confirmId: null };
-const POS_OPS = [['convert', 'تبدیل ارز'], ['initial', 'موجودی اولیه'], ['settle', 'تسویه تعهد']];
-const FEE_MODE_LABEL = { DEDUCT: 'کسر از ارز دریافتی', ADD_COST: 'اضافه به هزینهٔ ارز پرداختی', EXTRA: 'دریافتی اضافه (طبق توافق)' };
-const SRC_LABEL = { initial: 'موجودی اولیه', convert: 'تبدیل', settle: 'تسویه' };
-const TYPE_LABEL = { convert: 'تبدیل ارز', initial: 'موجودی اولیه', settle: 'تسویه تعهد' };
-const POS_FIELD_KEYS = ['amount', 'rate', 'feeValue', 'actual', 'toThrRate', 'unitCost'];
-const fmtN = (d) => money(d, Math.min(8, exactScale(d)));
+
+/* ===================== بخش «معامله از منابع شخصی» ===================== */
+const PS = { docs: [], form: null, detailId: null, tried: false };
+const POS_TYPES = [['convert', 'تبدیل ارز'], ['deposit', 'ثبت موجودی']];
+const EFFECT_LABEL = { ADDED: 'اضافه به مبلغ تسویه', DEDUCTED: 'کسر از مبلغ تسویه', NO_CHANGE: 'بدون تغییر در مبلغ تسویه' };
+const DOC_TYPE_LABEL = { convert: 'تبدیل ارز', deposit: 'ثبت موجودی' };
+const POS_NUM_KEYS = ['paid', 'received', 'rate', 'feeValue', 'amount', 'profit', 'loss'];
+const fmtN = (d) => money(d, Math.min(Math.max(S.decimals, 4), exactScale(d))); // نمایش تا ۴ رقم اعشار (یا بیشتر اگر در تنظیمات انتخاب شده)؛ ذخیره و محاسبه دقیق است
 const posNowLocal = () => { const d = new Date(); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`; };
-const posFresh = (type) => ({ type, from: 'USD CASH TUR', to: 'USD CASH THR', cur: 'USD CASH TUR', amount: '', rate: '', method: 'MULTIPLY', feeValue: '', feeUnit: 'permille', feeMode: 'DEDUCT',
-  actual: '', toThrRate: '', unitCost: '', note: '', date: posNowLocal(), dateTouched: false });
-const validEntryShape = (e) => e && Number.isFinite(e.id) && Number.isFinite(e.ts) && ['convert', 'initial', 'settle'].includes(e.type);
-
-(function posRestore() {
-  const raw = load('fx.ledger', []); const good = []; const bad = [];
-  (Array.isArray(raw) ? raw : []).forEach((e) => (validEntryShape(e) ? good : bad).push(e));
-  if (bad.length) store('fx.ledger.rejected', bad); // هرگز بی‌صدا دور ریخته نمی‌شود
-  PS.entries = good;
-  const d = load('fx.posdraft', null); PS.form = d && d.type ? { ...posFresh(d.type), ...d } : posFresh('convert');
-  PS.form.dateTouched = !!PS.form.dateTouched; if (!PS.form.dateTouched) PS.form.date = posNowLocal();
-})();
-
-function posPersistLocal() { try { localStorage.setItem('fx.ledger', JSON.stringify(PS.entries)); } catch (e) { toast('ذخیره محلی دفتر انجام نشد؛ حتماً CSV پشتیبان بگیر'); } }
-function posPersistDraft() { store('fx.posdraft', PS.form); }
-function ledgerDb(fn) { if (!IDB) return; dbQueue = dbQueue.then(fn).catch(() => { dbState = 'error'; setDbBadge(); toast('ذخیره دفتر در پایگاه مرورگر انجام نشد؛ CSV پشتیبان بگیر'); }); }
-const ledgerPut = (e) => ledgerDb(() => idbTx('readwrite', (os) => os.put(e), 'ledger'));
-const ledgerDel = (id) => ledgerDb(() => idbTx('readwrite', (os) => os.delete(id), 'ledger'));
-const nextEntryId = () => Math.max(Date.now(), PS.entries.reduce((m, e) => Math.max(m, e.id), 0) + 1);
-const posRep = () => replayLedger(PS.entries);
+const posFresh = (type) => ({ type, from: 'USD CASH TUR', to: 'USD CASH THR', cur: 'USD CASH TUR', paid: '', received: '', rate: '', method: 'MULTIPLY', feeValue: '', feeUnit: 'permille', feeEffect: 'NO_CHANGE',
+  amount: '', profit: '', loss: '', note: '', date: posNowLocal(), dateTouched: false });
+const validDocShape = (e) => e && Number.isFinite(e.id) && Number.isFinite(e.ts) && ['convert', 'deposit'].includes(e.type);
 const fdate = (ts) => `<span dir="ltr">${fmtTime(ts)}</span>`;
 const lv2 = (k, v, cls = '') => `<div class="lv"><span class="k">${k}</span><span class="v ${cls}">${v}</span></div>`;
 
-function entrySummary(e) {
-  if (e.type === 'convert') return `${fmtN(dec(e.amount))} ${e.from} → ${e.to} @ ${e.rate}${e.method === 'DIVIDE' ? ' (÷)' : ''}`;
-  return `${fmtN(dec(e.amount))} ${e.cur}` + (e.unitCost && e.cur !== REP ? ` @ ${e.unitCost}` : e.cur !== REP ? ' (بها نامشخص)' : '');
+(function curRestore() {
+  const raw = load('fx.curs', []); (Array.isArray(raw) ? raw : []).forEach((c) => { if (typeof c === 'string' && !LEDGER_CUR.includes(c)) { LEDGER_CUR.push(c); if (!CUR.includes(c)) CUR.push(c); } });
+})();
+const BASE_CUR_COUNT = 12;
+const customCurs = () => LEDGER_CUR.slice(BASE_CUR_COUNT);
+const curUsed = (c) => PS.docs.some((d) => d.from === c || d.to === c || d.cur === c);
+function saveCurs() { store('fx.curs', customCurs()); }
+function addCurrencyUI() {
+  const inp = $('cur-new'); const r = normalizeCurrency(inp.value); const msg = $('cur-msg');
+  if (!r.ok) { msg.textContent = r.err; inp.classList.add('bad'); return; }
+  LEDGER_CUR.push(r.name); if (!CUR.includes(r.name)) CUR.push(r.name); saveCurs(); toast('ارز «' + r.name + '» اضافه شد');
+  buildForm(); bindForm(); updateCalc(); renderPos();
 }
-function profitText(r) { return r.realizedKnown ? `${sign(r.realized) < 0 ? 'زیان' : 'سود'}: ${fmtN(r.realized)} ${REP}` : 'سود: نامشخص (بهای تمام‌شده یا نرخ ارزش‌گذاری ناقص است)'; }
-function entryDetailRows(e, r, lotsById) {
-  let h = lv2('نوع', TYPE_LABEL[e.type]) + lv2('تاریخ', fdate(e.ts));
-  if (e.type === 'convert') {
-    h += lv2('پرداخت', `${fmtN(r.paid)} ${e.from}`);
-    if (sign(r.fee) > 0) h += lv2(`کارمزد (${e.feeValue}${e.feeUnit === 'permille' ? '‰' : '٪'} — ${FEE_MODE_LABEL[e.feeMode]})`, `${fmtN(r.fee)} ${r.feeCur}`);
-    h += lv2('دریافت', `${fmtN(r.received)} ${e.to}`) + lv2('مبنای مبلغ دریافتی', r.receivedKind === 'actual' ? 'مبلغ واقعی واردشده' : 'محاسبه‌شده از نرخ و کارمزد');
-    if (r.receivedKind === 'actual') h += lv2('تخمین از نرخ و کارمزد', `${fmtN(r.estimated)} ${e.to}`);
-    r.consumed.forEach((c) => { const l = lotsById[c.lotId]; h += lv2(`لات مصرف‌شده (${l ? fmtTime(l.ts) : '—'})`, `${fmtN(c.amount)} ${e.from}${c.cost ? ' | بها ' + fmtN(c.cost) : ' | بها نامشخص'}`); });
-    if (sign(r.shortfall) > 0) h += lv2('کسری ← تعهد باز', `${fmtN(r.shortfall)} ${e.from}`, 'neg');
-  } else {
-    h += lv2('مبلغ', `${fmtN(dec(e.amount))} ${e.cur}`) + lv2('بهای هر واحد (دلار تهران)', e.unitCost || 'نامشخص');
+function removeCurrencyUI(c) {
+  if (curUsed(c)) { toast('این ارز در سندی استفاده شده و حذف نمی‌شود'); return; }
+  const i = LEDGER_CUR.indexOf(c); if (i >= BASE_CUR_COUNT) LEDGER_CUR.splice(i, 1); const j = CUR.indexOf(c); if (j >= 12) CUR.splice(j, 1);
+  ['from', 'to', 'cur'].forEach((k) => { if (PS.form[k] === c) PS.form[k] = k === 'to' ? 'USD CASH THR' : 'USD CASH TUR'; }); saveCurs(); posPersistDraft(); toast('ارز حذف شد'); buildForm(); bindForm(); updateCalc(); renderPos();
+}
+
+(function posRestore() {
+  const raw = load('fx.docs', []); const good = []; const bad = [];
+  (Array.isArray(raw) ? raw : []).forEach((e) => (validDocShape(e) ? good : bad).push(e));
+  if (bad.length) store('fx.docs.rejected', bad); // هرگز بی‌صدا دور ریخته نمی‌شود
+  PS.docs = good;
+  // مهاجرت یک‌بارهٔ اسناد نسخهٔ قبلی (کلید fx.ledger) — دادهٔ قدیمی دست‌نخورده می‌ماند
+  if (!load('fx.docs.migrated', false)) {
+    const old = load('fx.ledger', []); const have = new Set(PS.docs.map((d) => d.id));
+    (Array.isArray(old) ? old : []).forEach((e) => { try { if (e && !have.has(e.id) && ['convert', 'initial', 'settle'].includes(e.type)) { PS.docs.push(legacyToDoc(e)); have.add(e.id); } } catch (x) { /* سند خراب قدیمی نادیده؛ نسخهٔ خام باقی است */ } });
+    store('fx.docs.migrated', true); try { localStorage.setItem('fx.docs', JSON.stringify(PS.docs)); } catch (e) { /* بعداً اطلاع داده می‌شود */ }
   }
-  if (sign(r.settledTotal) > 0) h += lv2('تسویهٔ تعهد باز', `${fmtN(r.settledTotal)} ${e.type === 'convert' ? e.to : e.cur}`);
-  if (sign(r.toBalance) > 0) h += lv2('افزوده به موجودی واقعی', `${fmtN(r.toBalance)} ${e.type === 'convert' ? e.to : e.cur}`);
-  h += lv2('سود/زیان تحقق‌یافته', r.realizedKnown ? `${fmtN(r.realized)} ${REP}` : 'نامشخص', r.realizedKnown ? (sign(r.realized) > 0 ? 'pos' : sign(r.realized) < 0 ? 'neg' : '') : '');
-  if (e.note) h += lv2('یادداشت', esc(e.note));
-  if (r.note) h += `<div class="note">${esc(r.note)}</div>`;
+  const d = load('fx.posdraft2', null); PS.form = d && d.type ? { ...posFresh(d.type), ...d } : posFresh('convert');
+  PS.form.dateTouched = !!PS.form.dateTouched; if (!PS.form.dateTouched) PS.form.date = posNowLocal();
+})();
+
+function posPersistLocal() { try { localStorage.setItem('fx.docs', JSON.stringify(PS.docs)); } catch (e) { toast('ذخیره محلی دفتر انجام نشد؛ حتماً Excel پشتیبان بگیر'); } }
+function posPersistDraft() { store('fx.posdraft2', PS.form); }
+function docDb(fn) { if (!IDB) return; dbQueue = dbQueue.then(fn).catch(() => { dbState = 'error'; setDbBadge(); toast('ذخیره دفتر در پایگاه مرورگر انجام نشد؛ Excel پشتیبان بگیر'); }); }
+const docPut = (e) => docDb(() => idbTx('readwrite', (os) => os.put(e), 'docs'));
+const docDel = (id) => docDb(() => idbTx('readwrite', (os) => os.delete(id), 'docs'));
+const nextDocId = () => Math.max(Date.now(), PS.docs.reduce((m, e) => Math.max(m, e.id), 0) + 1);
+const posRep = () => replayDocs(PS.docs);
+
+function docSummary(d) {
+  if (d.type === 'convert') return `${fmtN(dd(d.paid))} ${d.from} → ${fmtN(receivedOf(d))} ${d.to}`;
+  return `${fmtN(dd(d.amount))} ${d.cur}`;
+}
+function docRowsHtml(d, r) {
+  let h = lv2('نوع', DOC_TYPE_LABEL[d.type]) + lv2('تاریخ', fdate(d.ts));
+  if (d.type === 'convert') {
+    h += lv2('پرداخت', `${fmtN(dd(d.paid))} ${d.from}`) + lv2(r.receivedKind === 'actual' ? 'دریافت (مبلغ واقعی واردشده)' : 'دریافت (محاسبه‌شده)', `${fmtN(r.received)} ${d.to}`) + lv2(`نرخ${d.method === 'DIVIDE' ? ' (تقسیم)' : ''}`, plain(dd(d.rate)));
+    if (r.receivedKind === 'actual' && cmp(r.received, r.computed) !== 0) h += lv2('محاسبه از نرخ و کارمزد', `${fmtN(r.computed)} ${d.to}`);
+    if (sign(r.fee) > 0) h += lv2(`کارمزد/هزینه (${d.feeValue}${d.feeUnit === 'permille' ? '‰' : '٪'} — ${EFFECT_LABEL[d.feeEffect]})`, `${fmtN(r.fee)} ${d.to}`);
+    h += lv2('کسر از موجودی', `${fmtN(r.paidFromBalance)} ${d.from}`);
+    if (sign(r.shortfall) > 0) h += lv2('کسری ← تعهد باز جدید', `${fmtN(r.shortfall)} ${d.from}`, 'neg');
+  } else h += lv2('مبلغ', `${fmtN(dd(d.amount))} ${d.cur}`);
+  const c = r.cur;
+  if (sign(r.settled) > 0) h += lv2('تسویهٔ تعهد باز', `${fmtN(r.settled)} ${c}`);
+  if (sign(r.toBalance) > 0) h += lv2('افزوده به موجودی', `${fmtN(r.toBalance)} ${c}`);
+  if (sign(r.profit) > 0) h += lv2('سود ثبت‌شده', `${fmtN(r.profit)} ${c}`, 'pos');
+  if (sign(r.loss) > 0) h += lv2('زیان/هزینهٔ ثبت‌شده', `${fmtN(r.loss)} ${c}`, 'neg');
+  if (d.note) h += lv2('یادداشت', esc(d.note));
+  if (r.warn) h += `<div class="err" style="display:block;font-size:13px">${esc(r.warn)}</div>`;
   return h;
 }
-function lotsIndex(rep) { const m = {}; Object.values(rep.lots).forEach((a) => a.forEach((l) => { m[l.id] = l; })); return m; }
 
 /* ---------- فرم ---------- */
 const curOpts = () => LEDGER_CUR.map((c) => [c, c]);
-const posField = (key, label, extra = '') => `<label class="fld"><span>${label}</span><input type="text" data-pk="${key}" inputmode="decimal" autocomplete="off" spellcheck="false" enterkeyhint="next" ${extra}><small class="err" data-pe="${key}"></small></label>`;
+const posField = (key, label) => `<label class="fld"><span>${label}</span><input type="text" data-pk="${key}" inputmode="decimal" autocomplete="off" spellcheck="false" enterkeyhint="next"><small class="err" data-pe="${key}"></small></label>`;
 const posSelect = (key, label, opts) => `<label class="fld"><span>${label}</span><select data-pk="${key}">${opts.map(([v, t]) => `<option value="${v}">${esc(t)}</option>`).join('')}</select><small class="err" data-pe="${key}"></small></label>`;
 function posFormHtml() {
   const f = PS.form;
-  const chips = `<div class="chips" id="pos-type">${POS_OPS.map(([v, t]) => `<button type="button" data-v="${v}" aria-pressed="${f.type === v}">${t}</button>`).join('')}</div>`;
-  let body = '';
+  const chips = `<div class="chips" id="pos-type">${POS_TYPES.map(([v, t]) => `<button type="button" data-v="${v}" aria-pressed="${f.type === v}">${t}</button>`).join('')}</div>`;
+  let body;
   if (f.type === 'convert') {
     body = `<div class="row">${posSelect('from', 'ارز مبدأ (پرداختی)', curOpts())}${posSelect('to', 'ارز مقصد (دریافتی)', curOpts())}</div>` +
-      posField('amount', 'مبلغ مبدأ') + posField('rate', 'نرخ تبدیل') +
+      posField('paid', 'مبلغ پرداختی (ارز مبدأ)') + posField('received', 'مبلغ دریافتی واقعی (اختیاری؛ خالی = محاسبهٔ خودکار)') + posField('rate', 'نرخ') +
       `<div class="chips" id="pos-method"><button type="button" data-v="MULTIPLY" aria-pressed="${f.method === 'MULTIPLY'}">ضرب در نرخ</button><button type="button" data-v="DIVIDE" aria-pressed="${f.method === 'DIVIDE'}">تقسیم بر نرخ</button></div>` +
-      `<div class="row">${posField('feeValue', 'کارمزد (خالی = صفر)')}${posSelect('feeUnit', 'واحد کارمزد', [['permille', 'در هزار (‰)'], ['percent', 'درصد (٪)']])}</div>` +
-      posSelect('feeMode', 'روش اعمال کارمزد', Object.entries(FEE_MODE_LABEL)) +
-      posField('actual', 'مبلغ دریافتی واقعی (اختیاری)') + `<div class="sub" id="pos-actual-hint">اگر وارد کنی، همان مبلغ ملاک است و کارمزد دوباره روی آن اعمال نمی‌شود.</div>` +
-      `<div id="pos-val-wrap">${posField('toThrRate', 'ارزش هر واحد ارز مقصد به دلار نقد تهران (اختیاری)')}<div class="sub">فقط وقتی هیچ‌کدام از دو ارز «USD CASH THR» نیست لازم است؛ وگرنه سود نامشخص می‌ماند.</div></div>`;
+      `<div class="row">${posField('feeValue', 'کارمزد/هزینه (خالی = ندارد)')}${posSelect('feeUnit', 'واحد', [['permille', 'در هزار (‰)'], ['percent', 'درصد (٪)']])}</div>` +
+      posSelect('feeEffect', 'اثر کارمزد/هزینه', Object.entries(EFFECT_LABEL)) +
+      '<div class="sub">مبلغ دریافتی = مبلغ پرداختی × نرخ (یا ÷ نرخ) و سپس اثر کارمزد (اضافه/کسر/بدون تغییر). فقط اگر مبلغ واقعی با این محاسبه فرق دارد (مثلاً گرد کردن یا توافق)، آن را در فیلد بالا بنویس؛ آن‌وقت همان ملاک است. کارمزد در سود/زیان دوباره شمرده نمی‌شود.</div>';
   } else {
-    body = posSelect('cur', f.type === 'initial' ? 'ارز موجودی' : 'ارزی که تأمین شد', curOpts()) + posField('amount', 'مبلغ') +
-      `<div id="pos-uc-wrap">${posField('unitCost', 'بهای تمام‌شدهٔ هر واحد به دلار نقد تهران (خالی = نامشخص)')}</div>` +
-      (f.type === 'settle' ? '<div class="sub">مبلغ ابتدا تعهد باز همان ارز را کم می‌کند؛ فقط مازاد به موجودی واقعی اضافه می‌شود.</div>' : '<div class="sub">موجودی اولیه به‌تنهایی سود یا زیان ایجاد نمی‌کند.</div>');
+    body = posSelect('cur', 'ارز موجودی', curOpts()) + posField('amount', 'مبلغ') + '<div class="sub">اگر برای این ارز تعهد باز داشته باشی، ابتدا تعهد تسویه می‌شود و فقط مازاد به موجودی می‌رود.</div>';
   }
-  return `<div class="card"><h3>ثبت عملیات</h3>${chips}${body}<label class="fld"><span>تاریخ و ساعت</span><input type="datetime-local" data-pk="date" style="direction:ltr"></label>` +
+  return `<div class="card"><h3>ثبت سند</h3>${chips}${body}<div id="pos-pl" class="stack"></div>` +
+    `<label class="fld"><span>تاریخ و ساعت</span><input type="datetime-local" data-pk="date" style="direction:ltr"></label>` +
     `<label class="fld"><span>یادداشت (اختیاری)</span><input type="text" data-pk="note" style="direction:rtl;text-align:right" autocomplete="off"></label>` +
-    `<div id="pos-preview" class="stack"></div><button class="btn" id="pos-save" type="button">ثبت در دفتر</button><div class="sub" id="pos-save-msg"></div></div>`;
+    `<div id="pos-preview" class="stack"></div><button class="btn" id="pos-save" type="button">ثبت سند</button></div>`;
 }
-function posSyncForm() {
-  const root = $('pos-form'); const f = PS.form;
-  root.querySelectorAll('[data-pk]').forEach((el) => { const k = el.dataset.pk; if (f[k] !== undefined) el.value = f[k]; });
-  const fromThr = f.from === REP || f.to === REP; const vw = $('pos-val-wrap'); if (vw) vw.hidden = fromThr;
-  const uw = $('pos-uc-wrap'); if (uw) uw.hidden = f.cur === REP;
+function posSyncForm() { document.querySelectorAll('#pos-form [data-pk]').forEach((el) => { const k = el.dataset.pk; if (PS.form[k] !== undefined) el.value = PS.form[k]; }); }
+function posCandidate(over = {}) { const f = { ...PS.form, ...over }; const ts = f.dateTouched ? new Date(f.date).getTime() : Date.now(); return validateDoc({ ...f, ts }); }
+let plKey = '';
+function posPlFields(maxP, maxL) {
+  const key = `${plKey.split('|')[0]}`; const box = $('pos-pl'); if (!box) return;
+  const sig = `${fmtN(maxP)}|${fmtN(maxL)}`; if (box.dataset.sig === sig) return; box.dataset.sig = sig;
+  const cur = PS.form.type === 'convert' ? PS.form.to : PS.form.cur;
+  let h = '';
+  if (sign(maxP) > 0) h += `<div class="card" style="background:var(--surface-2)"><div class="sub">پس از تسویهٔ تعهد، <b dir="ltr">${fmtN(maxP)} ${cur}</b> مازاد می‌ماند. اگر می‌خواهی بخشی یا همهٔ آن را سود ثبت کنی (به‌جای افزودن به موجودی):</div>${posField('profit', 'سود ثبت‌شده (' + cur + ')')}<button class="btn ghost" type="button" data-fill="profit" data-v="${plain(maxP)}">همهٔ مازاد</button></div>`;
+  if (sign(maxL) > 0) h += `<div class="card" style="background:var(--surface-2)"><div class="sub">پس از این دریافت، <b dir="ltr">${fmtN(maxL)} ${cur}</b> از تعهد باز می‌ماند. اگر می‌خواهی بخشی یا همهٔ آن را زیان/هزینه ثبت کنی (و تعهد بسته شود):</div>${posField('loss', 'زیان/هزینه ثبت‌شده (' + cur + ')')}<button class="btn ghost" type="button" data-fill="loss" data-v="${plain(maxL)}">همهٔ کسری</button></div>`;
+  box.innerHTML = h; bindPosInputs(box); posSyncForm();
 }
-function posCandidate() { const f = PS.form; const ts = f.dateTouched ? new Date(f.date).getTime() : Date.now(); return validateEntry({ ...f, ts }); }
 function posPreview() {
   const f = PS.form; const box = $('pos-preview'); if (!box) return;
   document.querySelectorAll('#pos-form [data-pe]').forEach((e) => { e.textContent = ''; });
   document.querySelectorAll('#pos-form input.bad').forEach((i) => i.classList.remove('bad'));
-  const v = posCandidate();
+  const showErr = (field, reason) => { const e = document.querySelector(`#pos-form [data-pe="${field}"]`); const i = document.querySelector(`#pos-form [data-pk="${field}"]`); if (e) e.textContent = DOC_REASONS[reason] || reason; if (i && i.classList) i.classList.add('bad'); };
+  // ۱) بیشینهٔ مجاز سود/زیان را با ورودی بدون سود/زیان می‌سنجیم
+  const probe = posCandidate({ profit: '', loss: '' });
+  let maxP = ZERO, maxL = ZERO;
+  if (probe.ok) { const r0 = replayDocs([...PS.docs, { ...probe.doc, id: -1 }]).results[-1]; maxP = r0.maxProfit; maxL = r0.maxLoss; }
+  posPlFields(maxP, maxL);
+  const v = posCandidate({ profit: sign(maxP) > 0 ? f.profit : '', loss: sign(maxL) > 0 ? f.loss : '' });
   if (!v.ok) {
-    v.errors.forEach(({ field, reason }) => {
-      const empty = POS_FIELD_KEYS.includes(field) && String(f[field] ?? '').trim() === '';
-      if (empty && !PS.tried) return;
-      const e = document.querySelector(`#pos-form [data-pe="${field}"]`); const i = document.querySelector(`#pos-form [data-pk="${field}"]`);
-      if (e) e.textContent = LEDGER_REASONS[reason] || reason; if (i && i.classList) i.classList.add('bad');
-    });
-    box.innerHTML = ''; return;
+    v.errors.forEach(({ field, reason }) => { const empty = POS_NUM_KEYS.includes(field) && String(f[field] ?? '').trim() === ''; if (empty && !PS.tried) return; showErr(field, reason); });
+    box.innerHTML = ''; return false;
   }
-  const cand = { ...v.entry, id: -1 }; const rep = replayLedger([...PS.entries, cand]); const r = rep.results[-1]; const lb = lotsIndex(rep);
-  let h = `<div class="card" style="background:var(--surface-2)"><h3>پیش‌نمایش (هنوز ثبت نشده)</h3>${entryDetailRows(cand, r, lb)}</div>`;
-  if (cand.type === 'convert' && sign(r.shortfall) > 0) h += `<div class="err" style="display:block;font-size:13px">موجودی ${cand.from} کافی نیست. ${fmtN(r.shortfall)} به‌عنوان تعهد باز ثبت می‌شود و موجودی واقعی منفی نمی‌شود.</div>`;
-  if (PS.entries.some((e) => e.ts > cand.ts)) h += '<div class="note">تاریخ این عملیات قبل از بعضی عملیات دیگر است؛ همهٔ مانده‌ها و سودها بر اساس ترتیب تاریخ دوباره محاسبه می‌شوند.</div>';
-  box.innerHTML = h;
+  const dP = dd(v.doc.profit), dL = dd(v.doc.loss); let over = false;
+  if (cmp(dP, maxP) > 0) { showErr('profit', 'OVER_PROFIT'); over = true; } if (cmp(dL, maxL) > 0) { showErr('loss', 'OVER_LOSS'); over = true; }
+  if (over) { box.innerHTML = ''; return false; }
+  const cand = { ...v.doc, id: -1 }; const rep = replayDocs([...PS.docs, cand]); const r = rep.results[-1];
+  let h = `<div class="card" style="background:var(--surface-2)"><h3>پیش‌نمایش (هنوز ثبت نشده)</h3>${docRowsHtml(cand, r)}</div>`;
+  if (cand.type === 'convert' && sign(r.shortfall) > 0) h += `<div class="err" style="display:block;font-size:13px">موجودی ${cand.from} کافی نیست. ${fmtN(r.shortfall)} به‌عنوان تعهد باز ثبت می‌شود و موجودی منفی نمی‌شود.</div>`;
+  if (PS.docs.some((e) => e.ts > cand.ts)) h += '<div class="note">تاریخ این سند قبل از بعضی اسناد دیگر است؛ همهٔ مانده‌ها بر اساس ترتیب تاریخ دوباره محاسبه می‌شوند.</div>';
+  box.innerHTML = h; return true;
 }
 function posSubmit() {
-  PS.tried = true; const v = posCandidate();
-  if (!v.ok) { posPreview(); const bad = document.querySelector('#pos-form input.bad'); if (bad) bad.focus(); return; }
-  const e = { ...v.entry, id: nextEntryId() }; PS.entries.push(e); posPersistLocal(); ledgerPut(e);
-  PS.form = { ...posFresh(PS.form.type), from: PS.form.from, to: PS.form.to, cur: PS.form.cur, method: PS.form.method, feeUnit: PS.form.feeUnit, feeMode: PS.form.feeMode };
-  PS.tried = false; posPersistDraft(); toast('در دفتر ثبت شد'); renderPos();
+  PS.tried = true; const ok = posPreview(); const v = posCandidate({ profit: PS.form.profit, loss: PS.form.loss });
+  if (!ok || !v.ok) { const bad = document.querySelector('#pos-form input.bad'); if (bad) bad.focus(); return; }
+  const d = { ...v.doc, id: nextDocId() }; PS.docs.push(d); posPersistLocal(); docPut(d);
+  const keep = PS.form; PS.form = { ...posFresh(keep.type), from: keep.from, to: keep.to, cur: keep.cur, method: keep.method, feeUnit: keep.feeUnit, feeEffect: keep.feeEffect };
+  PS.tried = false; posPersistDraft(); toast('سند ثبت شد'); renderPos();
+}
+function bindPosInputs(root) {
+  const inputs = () => [...document.querySelectorAll('#pos-form input[type="text"][data-pk]')].filter((i) => i.dataset.pk !== 'note');
+  root.querySelectorAll('[data-pk]').forEach((el) => {
+    if (el.dataset.bound) return; el.dataset.bound = '1'; const k = el.dataset.pk;
+    el.addEventListener(el.tagName === 'SELECT' || el.type === 'datetime-local' ? 'change' : 'input', () => {
+      if (POS_NUM_KEYS.includes(k)) { const raw = el.value; const f2 = filterTyping(raw); if (f2 !== raw) { const pos = Math.max(0, (el.selectionStart ?? raw.length) - (raw.length - f2.length)); el.value = f2; el.setSelectionRange(pos, pos); } PS.form[k] = f2; }
+      else { PS.form[k] = el.value; if (k === 'date') PS.form.dateTouched = true; }
+      posPersistDraft(); if (k === 'from' || k === 'to' || k === 'cur') { const b = $('pos-pl'); if (b) b.dataset.sig = ''; } posPreview();
+    });
+    if (el.type === 'text' && k !== 'note') el.addEventListener('keydown', (e) => { if (e.key !== 'Enter') return; e.preventDefault(); const L = inputs(); const i = L.indexOf(el); if (i < L.length - 1) L[i + 1].focus(); else el.blur(); });
+  });
+  root.querySelectorAll('[data-fill]').forEach((b) => { if (b.dataset.bound) return; b.dataset.bound = '1'; b.onclick = () => { PS.form[b.dataset.fill] = b.dataset.v; const other = b.dataset.fill === 'profit' ? 'loss' : 'profit'; PS.form[other] = ''; posPersistDraft(); posSyncForm(); posPreview(); }; });
 }
 function bindPosForm() {
-  const root = $('pos-form'); const inputs = [...root.querySelectorAll('input[type="text"][data-pk]')].filter((i) => i.dataset.pk !== 'note');
-  root.querySelectorAll('[data-pk]').forEach((el) => {
-    const k = el.dataset.pk;
-    el.addEventListener(el.tagName === 'SELECT' || el.type === 'datetime-local' ? 'change' : 'input', () => {
-      if (POS_FIELD_KEYS.includes(k)) { const raw = el.value; const f2 = filterTyping(raw); if (f2 !== raw) { const pos = Math.max(0, (el.selectionStart ?? raw.length) - (raw.length - f2.length)); el.value = f2; el.setSelectionRange(pos, pos); } PS.form[k] = f2; }
-      else { PS.form[k] = el.value; if (k === 'date') PS.form.dateTouched = true; }
-      posPersistDraft(); if (k === 'from' || k === 'to' || k === 'cur') posSyncForm(); posPreview();
-    });
-    if (el.type === 'text' && k !== 'note') el.addEventListener('keydown', (e) => { if (e.key !== 'Enter') return; e.preventDefault(); const i = inputs.indexOf(el); if (i < inputs.length - 1) inputs[i + 1].focus(); else el.blur(); });
-  });
+  const root = $('pos-form'); bindPosInputs(root);
   const chip = (id, key, after) => { const g = $(id); if (g) g.addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; PS.form[key] = b.dataset.v; posPersistDraft(); after(); }); };
-  chip('pos-type', 'type', () => { PS.tried = false; $('pos-form').innerHTML = posFormHtml(); posSyncForm(); bindPosForm(); posPreview(); });
+  chip('pos-type', 'type', () => { PS.tried = false; root.innerHTML = posFormHtml(); posSyncForm(); bindPosForm(); posPreview(); });
   chip('pos-method', 'method', () => { root.querySelectorAll('#pos-method button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === PS.form.method))); posPreview(); });
   $('pos-save').onclick = posSubmit;
 }
@@ -1005,53 +1057,59 @@ function bindPosForm() {
 function renderPos() {
   const v = $('view-pos'); const rep = posRep();
   if (PS.detailId != null) return renderPosDetail(v, rep);
-  v.onclick = null;
-  const nz = (b) => sign(b.real) !== 0 || sign(b.open) !== 0;
-  const totCost = rep.balances.reduce((s, b) => add(s, b.cost), ZERO); const anyUnknown = rep.balances.some((b) => b.costUnknown);
-  const opens = rep.balances.filter((b) => sign(b.open) > 0);
-  const cards = `<div class="card"><h3>سود و زیان تحقق‌یافته (${REP})</h3><div class="lv profit ${sign(rep.realized) > 0 ? 'pos' : sign(rep.realized) < 0 ? 'neg' : ''}"><span>${sign(rep.realized) < 0 ? 'زیان' : 'سود'}</span><span class="v">${fmtN(rep.realized)}</span></div>` +
-    (rep.unknownCount ? `<div class="sub">${rep.unknownCount} عملیات سود نامشخص دارند (بها یا نرخ ارزش‌گذاری وارد نشده) و در این جمع نیستند.</div>` : '') + '</div>' +
-    `<div class="card"><h3>بهای تمام‌شدهٔ موجودی (دلار تهران)</h3>${lv2('جمع بهای لات‌های باقی‌مانده', fmtN(totCost))}${anyUnknown ? '<div class="sub">بعضی لات‌ها بهای نامشخص دارند و در این جمع نیستند.</div>' : ''}</div>` +
-    `<div class="card"><h3>مجموع تعهدات باز</h3>${opens.length ? opens.map((b) => lv2(b.cur, fmtN(b.open), 'neg')).join('') : '<div class="sub">تعهد بازی وجود ندارد.</div>'}</div>`;
-  const rows = rep.balances.filter(nz).map((b) => `<tr><td dir="ltr">${b.cur}</td><td>${fmtN(b.real)}</td><td class="${sign(b.open) > 0 ? 'neg' : ''}">${fmtN(b.open)}</td><td class="${sign(b.net) < 0 ? 'neg' : ''}">${fmtN(b.net)}</td><td>${fmtN(b.cost)}${b.costUnknown ? ' + نامشخص' : ''}</td></tr>`).join('');
-  const balTable = `<div class="card"><h3>موجودی هر ارز</h3>${rows ? `<div class="tw"><table><thead><tr><th>ارز</th><th>موجودی واقعی</th><th>تعهد باز</th><th>مانده خالص</th><th>بها (دلار تهران)</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="sub">هنوز موجودی‌ای ثبت نشده است.</div>'}<div class="sub">مانده خالص = موجودی واقعی − تعهد باز</div></div>`;
-  const lots = []; LEDGER_CUR.forEach((c) => rep.lots[c].forEach((l) => { if (PS.showSpent || sign(l.remaining) > 0) lots.push(l); }));
-  const lotRows = lots.map((l) => `<tr><td dir="ltr">${l.cur}</td><td>${fdate(l.ts)}</td><td>${SRC_LABEL[l.source]}</td><td>${fmtN(l.amount0)}</td><td>${fmtN(l.remaining)}</td><td>${l.unitCost ? fmtN(l.unitCost) : 'نامشخص'}</td></tr>`).join('');
-  const lotTable = `<div class="card"><h3>لات‌های FIFO</h3><label class="sw"><span>نمایش لات‌های تمام‌شده</span><input type="checkbox" id="pos-spent"${PS.showSpent ? ' checked' : ''}></label>${lotRows ? `<div class="tw"><table><thead><tr><th>ارز</th><th>تاریخ</th><th>منبع</th><th>مقدار اولیه</th><th>مانده</th><th>بهای واحد</th></tr></thead><tbody>${lotRows}</tbody></table></div>` : '<div class="sub">لاتی وجود ندارد.</div>'}</div>`;
-  const hist = [...rep.sorted].reverse().map((e) => { const r = rep.results[e.id];
-    return `<button class="hist" type="button" data-id="${e.id}"><span class="t">${fmtTime(e.ts)} · ${TYPE_LABEL[e.type]}</span><span class="l">${esc(entrySummary(e))}</span><span class="l profit ${r.realizedKnown ? (sign(r.realized) > 0 ? 'pos' : sign(r.realized) < 0 ? 'neg' : '') : ''}">${esc(profitText(r))}</span>${sign(r.shortfall) > 0 ? '<span class="l neg">با کسری موجودی (تعهد باز)</span>' : ''}</button>`; }).join('');
-  v.innerHTML = cards + `<div id="pos-form" class="stack">${posFormHtml()}</div>` + balTable + lotTable +
-    `<div class="row" style="align-items:center"><span>${rep.sorted.length} عملیات در دفتر</span><button class="btn ghost" id="pos-csv" type="button" ${rep.sorted.length ? '' : 'disabled'}>خروجی CSV</button></div>` +
-    (hist || '<div class="card sub">دفتر خالی است.</div>');
+  const live = rep.balances.filter((b) => sign(b.balance) !== 0 || sign(b.obligation) !== 0);
+  const plRows = rep.balances.filter((b) => sign(b.profit) !== 0 || sign(b.loss) !== 0 || sign(b.feeAdded) !== 0 || sign(b.feeDeducted) !== 0);
+  const balCard = `<div class="card"><h3>موجودی و تعهد هر ارز</h3>${live.length ? `<div class="tw"><table><thead><tr><th>ارز</th><th>موجودی</th><th>تعهد باز</th><th>مانده خالص</th></tr></thead><tbody>` +
+    live.map((b) => `<tr><td dir="ltr">${b.cur}</td><td>${fmtN(b.balance)}</td><td class="${sign(b.obligation) > 0 ? 'neg' : ''}">${fmtN(b.obligation)}</td><td class="${sign(b.net) < 0 ? 'neg' : ''}">${fmtN(b.net)}</td></tr>`).join('') + '</tbody></table></div>' : '<div class="sub">ارزی با موجودی یا تعهد باز وجود ندارد.</div>'}<div class="sub">مانده خالص = موجودی − تعهد باز</div></div>`;
+  const plCard = `<div class="card"><h3>سود و زیان هر ارز</h3>${plRows.length ? `<div class="tw"><table><thead><tr><th>ارز</th><th>سود</th><th>زیان</th><th>کارمزد +</th><th>هزینه −</th><th>خالص</th></tr></thead><tbody>` +
+    plRows.map((b) => `<tr><td dir="ltr">${b.cur}</td><td>${fmtN(b.profit)}</td><td>${fmtN(b.loss)}</td><td>${fmtN(b.feeAdded)}</td><td>${fmtN(b.feeDeducted)}</td><td class="${sign(b.pnl) > 0 ? 'pos' : sign(b.pnl) < 0 ? 'neg' : ''}"><b>${fmtN(b.pnl)}</b></td></tr>`).join('') + '</tbody></table></div>' : '<div class="sub">سود، زیان یا کارمزدی ثبت نشده است.</div>'}<div class="sub">کارمزد + = کارمزدهای «اضافه»، هزینه − = «کسر». خالص = سود − زیان + کارمزد − هزینه. کارمزد «بدون تغییر» حساب نمی‌شود. سود و زیان را خودت هنگام تسویه ثبت می‌کنی.</div></div>`;
+  const list = [...rep.sorted].reverse().map((d) => { const r = rep.results[d.id];
+    return `<button class="hist" type="button" data-id="${d.id}"><span class="t">${fmtTime(d.ts)} · ${DOC_TYPE_LABEL[d.type]}</span><span class="l">${esc(docSummary(d))}</span>` +
+      (sign(r.shortfall) > 0 ? '<span class="l neg">کسری موجودی ← تعهد باز</span>' : '') + (sign(r.settled) > 0 ? '<span class="l">تسویهٔ تعهد</span>' : '') +
+      (sign(r.profit) > 0 ? `<span class="l profit pos">سود: ${fmtN(r.profit)} ${r.cur}</span>` : '') + (sign(r.loss) > 0 ? `<span class="l profit neg">زیان: ${fmtN(r.loss)} ${r.cur}</span>` : '') + (r.warn ? '<span class="l neg">نیاز به بازبینی</span>' : '') + '</button>'; }).join('');
+  const curCard = `<div class="card"><h3>تعریف ارز جدید</h3><div class="row"><label class="fld"><span>نام ارز (مثلاً GBP یا EUR CASH)</span><input type="text" id="cur-new" style="direction:ltr;text-align:left" autocomplete="off"></label><button class="btn" id="cur-add" type="button" style="flex:0 0 auto;align-self:flex-end">افزودن</button></div><small class="err" id="cur-msg"></small>` +
+    (customCurs().length ? `<div class="chips">${customCurs().map((c) => `<span class="badge" dir="ltr">${esc(c)} ${curUsed(c) ? '' : `<a href="#" data-rmcur="${esc(c)}" aria-label="حذف ${esc(c)}">✕</a>`}</span>`).join(' ')}</div><div class="sub">ارزی که در سندی استفاده شده حذف نمی‌شود.</div>` : '<div class="sub">ارزهای پیش‌فرض ثابت‌اند؛ ارز تازه برای ماشین‌حساب و این بخش هر دو در دسترس است.</div>') + '</div>';
+  v.innerHTML = balCard + plCard + `<div id="pos-form" class="stack">${posFormHtml()}</div>` + curCard +
+    `<div class="row" style="align-items:center"><span>${rep.sorted.length} سند در دفتر</span><button class="btn ghost" id="pos-xlsx" type="button" ${rep.sorted.length ? '' : 'disabled'}>خروجی Excel</button></div>` +
+    (list || '<div class="card sub">هنوز سندی ثبت نشده است.</div>');
   posSyncForm(); bindPosForm(); posPreview();
-  $('pos-spent').onchange = (e) => { PS.showSpent = e.target.checked; renderPos(); };
-  $('pos-csv').onclick = posCsvDownload;
+  $('pos-xlsx').onclick = posXlsxDownload;
+  $('cur-add').onclick = addCurrencyUI; $('cur-new').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addCurrencyUI(); } });
+  v.querySelectorAll('[data-rmcur]').forEach((a) => { a.onclick = (e) => { e.preventDefault(); removeCurrencyUI(a.dataset.rmcur); }; });
   v.querySelectorAll('.hist').forEach((b) => { b.onclick = () => { PS.detailId = Number(b.dataset.id); renderPos(); window.scrollTo({ top: 0 }); }; });
 }
 function renderPosDetail(v, rep) {
-  const e = PS.entries.find((x) => x.id === PS.detailId); if (!e) { PS.detailId = null; return renderPos(); }
-  const r = rep.results[e.id];
-  v.innerHTML = `<button class="btn ghost" id="pd-back" type="button">بازگشت به دفتر</button><div class="card"><h3>جزئیات عملیات</h3>${entryDetailRows(e, r, lotsIndex(rep))}</div>` +
-    `<button class="btn danger" id="pd-del" type="button">حذف این عملیات</button><div id="pd-confirm"></div>`;
+  const d = PS.docs.find((x) => x.id === PS.detailId); if (!d) { PS.detailId = null; return renderPos(); }
+  const r = rep.results[d.id];
+  v.innerHTML = `<button class="btn ghost" id="pd-back" type="button">بازگشت به دفتر</button><div class="card"><h3>جزئیات سند</h3>${docRowsHtml(d, r)}</div>` +
+    (d.type === 'convert' ? `<div class="card"><h3>پیام بستن معامله</h3><pre class="msg" id="pd-msg">${esc(closeMessage(d, S.decimals))}</pre><button class="btn ghost" type="button" id="pd-copy">Copy</button></div>` : '') +
+    `<button class="btn danger" id="pd-del" type="button">حذف این سند</button><div id="pd-confirm"></div>`;
   $('pd-back').onclick = () => { PS.detailId = null; renderPos(); };
+  if (d.type === 'convert') $('pd-copy').onclick = () => copyText($('pd-msg').textContent);
   $('pd-del').onclick = () => {
-    const after = replayLedger(PS.entries.filter((x) => x.id !== e.id));
-    const newOpen = after.balances.filter((b) => sign(b.open) > 0 && sign(rep.balances.find((q) => q.cur === b.cur).open) === 0).map((b) => b.cur);
-    $('pd-confirm').innerHTML = `<div class="confirm"><strong>حذف از دفتر</strong><div>این عملیات برای همیشه حذف می‌شود. تمام لات‌ها، مانده‌ها، تعهدها و سودها از روی بقیهٔ دفتر دوباره محاسبه می‌شوند و ممکن است تغییر کنند.${newOpen.length ? ` <b>هشدار: با این حذف برای ${newOpen.join('، ')} تعهد باز ایجاد می‌شود.</b>` : ''}</div><div class="row"><button class="btn danger" id="pdc-ok" type="button">حذف</button><button class="btn ghost" id="pdc-no" type="button">انصراف</button></div></div>`;
+    const after = replayDocs(PS.docs.filter((x) => x.id !== d.id)); const was = (c, rp) => rp.balances.find((b) => b.cur === c);
+    const newOpen = after.balances.filter((b) => sign(b.obligation) > 0 && sign(was(b.cur, rep).obligation) === 0).map((b) => b.cur);
+    const newWarn = after.sorted.filter((x) => after.results[x.id].warn && !rep.results[x.id].warn).length;
+    $('pd-confirm').innerHTML = `<div class="confirm"><strong>حذف از دفتر</strong><div>این سند برای همیشه حذف می‌شود. موجودی‌ها، تعهدها و سود/زیان‌ها از روی بقیهٔ اسناد دوباره محاسبه می‌شوند.${newOpen.length ? ` <b>هشدار: برای ${newOpen.join('، ')} تعهد باز ایجاد می‌شود.</b>` : ''}${newWarn ? ` <b>هشدار: مبلغ سود/زیان ${newWarn} سند دیگر دیگر معتبر نخواهد بود و به حداکثر مجاز کاهش می‌یابد.</b>` : ''}</div><div class="row"><button class="btn danger" id="pdc-ok" type="button">حذف</button><button class="btn ghost" id="pdc-no" type="button">انصراف</button></div></div>`;
     $('pdc-no').onclick = () => { $('pd-confirm').innerHTML = ''; };
-    $('pdc-ok').onclick = () => { PS.entries = PS.entries.filter((x) => x.id !== e.id); posPersistLocal(); ledgerDel(e.id); PS.detailId = null; toast('از دفتر حذف شد'); renderPos(); };
+    $('pdc-ok').onclick = () => { PS.docs = PS.docs.filter((x) => x.id !== d.id); posPersistLocal(); docDel(d.id); PS.detailId = null; toast('سند حذف شد'); renderPos(); };
   };
 }
-function posCsvDownload() {
+function posXlsxDownload() {
   try {
-    const blob = new Blob(['﻿' + ledgerCsv(PS.entries, posRep())], { type: 'text/csv;charset=utf-8' }); const url = URL.createObjectURL(blob); const a = document.createElement('a');
-    a.href = url; a.download = 'FxTrade-positions-' + new Date().toISOString().slice(0, 10) + '.csv'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 10000); toast('فایل CSV ساخته شد');
-  } catch (e) { toast('ساخت CSV انجام نشد'); }
+    const blob = new Blob([buildDocsXlsx(PS.docs)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }); const url = URL.createObjectURL(blob); const a = document.createElement('a');
+    a.href = url; a.download = 'FxTrade-personal-' + new Date().toISOString().slice(0, 10) + '.xlsx'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 10000); toast('فایل Excel ساخته شد');
+  } catch (e) { toast('ساخت فایل Excel انجام نشد'); }
 }
 async function posInitFromDb() {
-  const all = await idbTx('readonly', (os) => os.getAll(), 'ledger'); const good = (all || []).filter(validEntryShape);
-  if (good.length) PS.entries = good.sort((a, b) => a.id - b.id);
-  else if (PS.entries.length) PS.entries.forEach(ledgerPut); // مهاجرت از ذخیرهٔ محلی به پایگاه
+  const all = await idbTx('readonly', (os) => os.getAll(), 'docs'); const good = (all || []).filter(validDocShape);
+  // اسناد قدیمیِ ذخیرهٔ ledger در IndexedDB (نسخهٔ قبلی) — فقط اگر هنوز مهاجرت نشده باشند
+  const ids = new Set(good.map((d) => d.id)); let added = 0;
+  if (!load('fx.docs.idbmigrated', false)) {
+    try { const old = await idbTx('readonly', (os) => os.getAll(), 'ledger'); (old || []).forEach((e) => { if (e && !ids.has(e.id) && ['convert', 'initial', 'settle'].includes(e.type)) { try { good.push(legacyToDoc(e)); ids.add(e.id); added++; } catch (x) { /* نادیده */ } } }); store('fx.docs.idbmigrated', true); } catch (e) { /* storeٔ قدیمی نبود */ }
+  }
+  if (good.length) { PS.docs = good.sort((a, b) => a.id - b.id); if (added) PS.docs.forEach(docPut); }
+  else if (PS.docs.length) PS.docs.forEach(docPut); // مهاجرت از ذخیرهٔ محلی به پایگاه
   posPersistLocal();
 }
 
