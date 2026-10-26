@@ -314,7 +314,7 @@ function buildMsg(title, r, rate, percent, fee, effect, feeLabel, total, decimal
   const amountDec = Math.max(decimals, exactScale(r.amount));
   lines.push(`AMOUNT: ${money(r.amount, amountDec)} (${r.origin})`);
   lines.push(`RATE: ${plain(rate)}`);
-  if (r.mode === 'FEE' && percent && fee) lines.push(`${feeLabel}: ${plain(percent)}% = ${money(fee, decimals)} (${r.dest}) (${EFFECT_CODE[effect]})`);
+  if (r.mode === 'FEE' && percent && fee && sign(fee) !== 0) lines.push(`${feeLabel}: ${plain(percent)}% = ${money(fee, decimals)} (${r.dest}) (${EFFECT_CODE[effect]})`);
   lines.push(`TOTAL: ${money(total, decimals)} (${r.dest})`);
   if (ms != null) lines.push(`DATE: ${fmtTime(ms)}`);
   return lines.join('\n');
@@ -887,6 +887,7 @@ $('tab-hist').onclick = () => setTab('hist');
 $('tab-pos').onclick = () => setTab('pos');
 
 
+
 /* ===================== بخش «معامله از منابع شخصی» ===================== */
 const PS = { docs: [], form: null, detailId: null, tried: false };
 const POS_TYPES = [['convert', 'تبدیل ارز'], ['deposit', 'ثبت موجودی']];
@@ -1067,7 +1068,7 @@ function renderPos() {
     return `<button class="hist" type="button" data-id="${d.id}"><span class="t">${fmtTime(d.ts)} · ${DOC_TYPE_LABEL[d.type]}</span><span class="l">${esc(docSummary(d))}</span>` +
       (sign(r.shortfall) > 0 ? '<span class="l neg">کسری موجودی ← تعهد باز</span>' : '') + (sign(r.settled) > 0 ? '<span class="l">تسویهٔ تعهد</span>' : '') +
       (sign(r.profit) > 0 ? `<span class="l profit pos">سود: ${fmtN(r.profit)} ${r.cur}</span>` : '') + (sign(r.loss) > 0 ? `<span class="l profit neg">زیان: ${fmtN(r.loss)} ${r.cur}</span>` : '') + (r.warn ? '<span class="l neg">نیاز به بازبینی</span>' : '') + '</button>'; }).join('');
-  const curCard = `<div class="card"><h3>تعریف ارز جدید</h3><div class="row"><label class="fld"><span>نام ارز (مثلاً GBP یا EUR CASH)</span><input type="text" id="cur-new" style="direction:ltr;text-align:left" autocomplete="off"></label><button class="btn" id="cur-add" type="button" style="flex:0 0 auto;align-self:flex-end">افزودن</button></div><small class="err" id="cur-msg"></small>` +
+  const curCard = `<div class="card"><h3>تعریف ارز جدید</h3><div class="stack"><label class="fld"><span>نام ارز (مثلاً GBP یا EUR CASH)</span><input type="text" id="cur-new" dir="ltr" style="text-align:left" autocomplete="off" autocapitalize="characters" spellcheck="false"></label><button class="btn" id="cur-add" type="button">افزودن</button></div><small class="err" id="cur-msg"></small>` +
     (customCurs().length ? `<div class="chips">${customCurs().map((c) => `<span class="badge" dir="ltr">${esc(c)} ${curUsed(c) ? '' : `<a href="#" data-rmcur="${esc(c)}" aria-label="حذف ${esc(c)}">✕</a>`}</span>`).join(' ')}</div><div class="sub">ارزی که در سندی استفاده شده حذف نمی‌شود.</div>` : '<div class="sub">ارزهای پیش‌فرض ثابت‌اند؛ ارز تازه برای ماشین‌حساب و این بخش هر دو در دسترس است.</div>') + '</div>';
   v.innerHTML = balCard + plCard + `<div id="pos-form" class="stack">${posFormHtml()}</div>` + curCard +
     `<div class="row" style="align-items:center"><span>${rep.sorted.length} سند در دفتر</span><button class="btn ghost" id="pos-xlsx" type="button" ${rep.sorted.length ? '' : 'disabled'}>خروجی Excel</button></div>` +
