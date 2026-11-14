@@ -1,3 +1,16 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1d7a45">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="تیم‌بندی">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
 <title>تیم‌بندی هفتگی</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -147,7 +160,8 @@ button.badge{cursor:pointer}
 @media (max-width:480px){.bar{grid-template-columns:80px 1fr 40px}.hdr h1{font-size:28px}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
-
+</head>
+<body>
 <div id="app" dir="rtl" lang="fa">
   <header class="hdr" id="hdr"></header>
   <div class="tabs" role="tablist" id="tabs"></div>
@@ -220,6 +234,7 @@ function planTeams(pool,T,size,prevSig){
 
 (function(){
 'use strict';
+if('serviceWorker' in navigator)window.addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{})});
 document.documentElement.dir='rtl';document.documentElement.lang='fa';
 
 const POS=[{k:'GK',n:'دروازه‌بان'},{k:'DEF',n:'مدافع'},{k:'MID',n:'هافبک'},{k:'FWD',n:'مهاجم'}];
@@ -621,3 +636,5 @@ async function copyText(){
 loadLocal();render();initDb();
 })();
 </script>
+</body>
+</html>
