@@ -1,0 +1,623 @@
+<title>تیم‌بندی هفتگی</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lalezar&family=Vazirmatn:wght@400;600;800&display=swap">
+<style>
+/* Layout: a narrow team-sheet column. Pitch-line circle motif in the header, three steps as tabs, teams as jersey-keyed cards. */
+:root{
+  --bg:#eef3ee; --surface:#ffffff; --surface2:#f3f7f2; --fg:#14231a; --muted:#566a5c; --line:#d3ddd1;
+  --accent:#1d7a45; --accent-fg:#ffffff; --accent-soft:#dcefe2;
+  --good:#1d7a45; --warn:#a05a00; --bad:#b3261e;
+  --r-gk:#a05a00; --r-def:#2459c4; --r-mid:#1d7a45; --r-fwd:#b3261e;
+  --font-body:'Vazirmatn',Tahoma,'Segoe UI',sans-serif;
+  --font-display:'Lalezar','Vazirmatn',Tahoma,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0e1611; --surface:#151f18; --surface2:#1b281f; --fg:#e6efe8; --muted:#9bac9f; --line:#2a3b2f;
+    --accent:#4cc47d; --accent-fg:#07210f; --accent-soft:#1c3a28;
+    --good:#4cc47d; --warn:#e3a443; --bad:#f2786f;
+    --r-gk:#e3a443; --r-def:#74a5ff; --r-mid:#4cc47d; --r-fwd:#f2786f;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0e1611; --surface:#151f18; --surface2:#1b281f; --fg:#e6efe8; --muted:#9bac9f; --line:#2a3b2f;
+  --accent:#4cc47d; --accent-fg:#07210f; --accent-soft:#1c3a28;
+  --good:#4cc47d; --warn:#e3a443; --bad:#f2786f;
+  --r-gk:#e3a443; --r-def:#74a5ff; --r-mid:#4cc47d; --r-fwd:#f2786f;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{
+  background:var(--bg); color:var(--fg); font-family:var(--font-body); font-size:15px; line-height:1.7;
+  padding-block:0 96px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+}
+#app{max-width:880px;margin:0 auto}
+h1,h2,h3{margin:0;font-weight:800}
+button,input,textarea,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* header */
+.hdr{position:relative;overflow:hidden;padding:28px 4px 18px;display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
+.hdr::before{content:"";position:absolute;inset-inline-start:-70px;top:-70px;width:190px;height:190px;border-radius:50%;border:2px solid var(--line);pointer-events:none}
+.hdr::after{content:"";position:absolute;inset-inline-start:-70px;top:25px;width:190px;height:0;border-top:2px solid var(--line);pointer-events:none}
+.hdr h1{font-family:var(--font-display);font-weight:400;font-size:34px;line-height:1.2;position:relative}
+.hdr p{margin:2px 0 0;color:var(--muted);font-size:14px;position:relative}
+.chip-st{position:relative;font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:99px;padding:2px 10px;background:var(--surface)}
+.chip-st.ok{color:var(--good)} .chip-st.err{color:var(--bad)}
+
+/* tabs */
+.tabs{display:flex;gap:4px;border-bottom:2px solid var(--line);margin-bottom:16px}
+.tab{flex:1;background:none;border:0;border-bottom:3px solid transparent;margin-bottom:-2px;padding:10px 6px;font-weight:600;color:var(--muted);min-width:0}
+.tab[aria-selected="true"]{color:var(--accent);border-bottom-color:var(--accent)}
+.tab small{font-weight:400}
+
+/* surfaces */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:14px}
+.card h2{font-size:17px;margin-bottom:10px}
+.muted{color:var(--muted)}
+.fld{display:flex;flex-direction:column;gap:4px;margin-bottom:12px;min-width:0}
+.fld>span,.rng .rt{font-size:13px;color:var(--muted);font-weight:600}
+input[type=text]{width:100%;background:var(--surface2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-width:0}
+textarea{width:100%;background:var(--surface2);border:1px solid var(--line);border-radius:8px;padding:10px;min-height:220px;resize:vertical;line-height:1.9}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px 18px;margin-bottom:12px}
+.rng{display:grid;grid-template-columns:1fr auto;align-items:center;gap:2px 8px}
+.rng output{font-weight:800;font-variant-numeric:tabular-nums}
+.rng input{grid-column:1/-1;direction:ltr;width:100%;accent-color:var(--accent)}
+
+/* buttons */
+.btn{border:1px solid var(--line);background:var(--surface2);border-radius:8px;padding:8px 14px;font-weight:600}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.btn.big{width:100%;padding:12px 16px;font-size:16px}
+.btn.ghost{background:none}
+.mini{border:1px solid var(--line);background:var(--surface2);border-radius:6px;padding:1px 10px;font-size:13px}
+.mini.bad{background:var(--bad);border-color:var(--bad);color:#fff}
+.mini.acc{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* chips and tags */
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:var(--surface2);border-radius:99px;padding:1px 12px;font-size:13px;color:var(--muted)}
+.chip[aria-pressed="true"]{font-weight:600;color:var(--c);border-color:var(--c);background:color-mix(in srgb,var(--c) 14%,var(--surface))}
+.pos-GK{--c:var(--r-gk)} .pos-DEF{--c:var(--r-def)} .pos-MID{--c:var(--r-mid)} .pos-FWD{--c:var(--r-fwd)}
+.tag{font-size:12px;font-weight:600;border-radius:6px;padding:0 8px;white-space:nowrap;color:var(--c);background:color-mix(in srgb,var(--c) 14%,var(--surface))}
+.tag.good{--c:var(--good)} .tag.warn{--c:var(--warn)} .tag.bad{--c:var(--bad)}
+.badge{font-size:12px;font-weight:600;border:1px solid var(--c);color:var(--c);background:color-mix(in srgb,var(--c) 12%,var(--surface));border-radius:6px;padding:0 8px;white-space:nowrap}
+button.badge{cursor:pointer}
+
+/* players */
+.pl{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px;display:flex;flex-direction:column;gap:10px}
+.pl-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pl .nm{flex:1;min-width:120px;font-weight:600;background:transparent;border-color:transparent;padding:4px 6px}
+.pl .nm:hover,.pl .nm:focus{background:var(--surface2);border-color:var(--line)}
+.pl .two{margin:0}
+.del-ask{font-size:13px;display:flex;gap:6px;align-items:center}
+.empty{text-align:center;padding:28px 12px;border:1px dashed var(--line);border-radius:10px;color:var(--muted);display:flex;flex-direction:column;gap:12px;align-items:center}
+
+/* attendance */
+.at{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin-bottom:8px;cursor:pointer}
+.at:has(input:checked){border-color:var(--accent);background:var(--accent-soft)}
+.at.off{opacity:.55;cursor:not-allowed}
+.at input{width:22px;height:22px;accent-color:var(--accent);flex:none}
+.at-main{flex:1;min-width:0;display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center}
+.at-main b{font-weight:600}
+.at-meta{font-size:12.5px;color:var(--muted);white-space:nowrap}
+.stepper{display:flex;align-items:center;gap:10px}
+.stepper button{width:34px;height:34px;border-radius:8px;border:1px solid var(--line);background:var(--surface2);font-size:18px;line-height:1}
+.stepper output{min-width:28px;text-align:center;font-weight:800;font-size:18px;font-variant-numeric:tabular-nums}
+.note{border-radius:8px;padding:8px 12px;font-size:14px;background:var(--surface2);border:1px solid var(--line);margin:4px 0 12px}
+.note.good{border-color:var(--good)} .note.warn{border-color:var(--warn)} .note.bad{border-color:var(--bad)}
+.sug{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 12px}
+.crow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:6px 0;border-top:1px solid var(--line)}
+.crow:first-of-type{border-top:0}
+.crow .lbl{min-width:70px;font-weight:600;font-size:14px}
+.sw{width:26px;height:26px;border-radius:50%;border:2px solid var(--line);background:var(--c);padding:0}
+.sw[aria-pressed="true"]{outline:2px solid var(--fg);outline-offset:2px}
+.jersey{width:26px;height:26px;flex:none}
+
+/* result */
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px;margin-bottom:14px}
+.team{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden;display:flex;flex-direction:column;min-width:0}
+.team-h{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line);border-top:5px solid var(--c);flex-wrap:wrap}
+.team-h h3{font-size:16px;flex:1;min-width:0}
+.team-h small{color:var(--muted)}
+.mem{display:flex;align-items:center;gap:8px;padding:4px 8px 4px 12px;border-bottom:1px solid var(--line)}
+.mem:last-child{border-bottom:0}
+.mem-main{flex:1;min-width:0;display:flex;justify-content:space-between;gap:8px;background:none;border:0;padding:6px 4px;text-align:start;border-radius:6px}
+.mem-main span:last-child{color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums}
+.mem.sel{background:var(--accent-soft)}
+.mem.sel .mem-main{font-weight:800}
+.warnline{padding:6px 12px;font-size:13px;color:var(--bad)}
+.team-act{display:flex;flex-wrap:wrap;gap:6px;padding:8px 12px;border-bottom:1px solid var(--line);background:var(--surface2)}
+.sub{padding:3px 12px;font-size:12.5px;font-weight:600;color:var(--muted);background:var(--surface2);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.bars{display:flex;flex-direction:column;gap:8px}
+.bar{display:grid;grid-template-columns:110px 1fr 44px;gap:10px;align-items:center;font-size:13.5px}
+.bar i{display:block;height:10px;border-radius:5px;background:var(--c)}
+.bar .trk{background:var(--surface2);border-radius:5px;border:1px solid var(--line);overflow:hidden}
+.bar b{font-variant-numeric:tabular-nums;text-align:end}
+.selbar{position:sticky;top:0;z-index:5;background:var(--accent);color:var(--accent-fg);border-radius:8px;padding:8px 12px;margin-bottom:12px;display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;font-size:14px}
+.selbar button{background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.5);color:inherit;border-radius:6px;padding:0 10px}
+
+#toast{position:fixed;bottom:calc(16px + env(safe-area-inset-bottom,0px));left:max(16px,env(safe-area-inset-left,0px));right:max(16px,env(safe-area-inset-right,0px));display:flex;justify-content:center;pointer-events:none;z-index:20}
+#toast span{background:var(--fg);color:var(--bg);border-radius:8px;padding:8px 16px;font-size:14px;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+@media (max-width:480px){.bar{grid-template-columns:80px 1fr 40px}.hdr h1{font-size:28px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div id="app" dir="rtl" lang="fa">
+  <header class="hdr" id="hdr"></header>
+  <div class="tabs" role="tablist" id="tabs"></div>
+  <main id="view"></main>
+</div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/*LOGIC*/
+const ROLES=['GK','DEF','MID','FWD'];
+const eff=p=>p.rating*(p.fit/100);
+function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+function sizesFor(n,T){const base=Math.floor(n/T),extra=n%T,s=[];for(let i=0;i<T;i++)s.push(base+(i<extra?1:0));return shuffle(s)}
+function pickRole(t,p){
+  const opts=p.pos.filter(k=>k!=='GK');const list=opts.length?opts:['GK'];
+  let best=list[0],bv=1e9;
+  for(const k of shuffle(list)){if(t.rc[k]<bv){bv=t.rc[k];best=k}}
+  return best;
+}
+function attempt(play,sizes,T){
+  const teams=Array.from({length:T},()=>({ids:[],roles:{},power:0,rc:{GK:0,DEF:0,MID:0,FWD:0}}));
+  const put=(t,p,r)=>{t.ids.push(p.id);t.roles[p.id]=r;t.power+=eff(p);t.rc[r]++};
+  const order=shuffle([...Array(T).keys()]);
+  const arr=shuffle(play);
+  const gks=arr.filter(p=>p.pos.includes('GK')).sort((a,b)=>a.pos.length-b.pos.length);
+  const keepers=gks.slice(0,T);
+  keepers.forEach((p,i)=>put(teams[order[i]],p,'GK'));
+  const rest=arr.filter(p=>!keepers.includes(p)).map(p=>({p,k:eff(p)+(Math.random()-.5)*1.6})).sort((a,b)=>b.k-a.k).map(x=>x.p);
+  for(const p of rest){
+    let bt=-1,bc=1e9,br=null;
+    for(let ti=0;ti<T;ti++){
+      const t=teams[ti];if(t.ids.length>=sizes[ti])continue;
+      const r=pickRole(t,p);
+      const avg=teams.reduce((s,x)=>s+x.rc[r],0)/T;
+      const cost=t.power/sizes[ti]+0.9*(t.rc[r]-avg)+Math.random()*0.5;
+      if(cost<bc){bc=cost;bt=ti;br=r}
+    }
+    put(teams[bt],p,br);
+  }
+  const avgs=teams.map(t=>t.power/Math.max(1,t.ids.length));
+  const spread=Math.max(...avgs)-Math.min(...avgs);
+  let roleSp=0;
+  for(const r of ['DEF','MID','FWD']){const v=teams.map(t=>t.rc[r]);roleSp+=Math.max(...v)-Math.min(...v)}
+  const noGK=teams.filter(t=>t.rc.GK===0).length;
+  const score=spread*3+roleSp*1.2+noGK*6;
+  const sig=teams.map(t=>t.ids.slice().sort().join(',')).sort().join('|');
+  return{teams:teams.map(t=>({ids:t.ids,roles:t.roles})),score,sig};
+}
+function planTeams(pool,T,size,prevSig){
+  const cap=T*size,n=Math.min(pool.length,cap);
+  const play=shuffle(pool),bench=[];
+  if(pool.length>n){
+    let need=pool.length-n;
+    for(let i=play.length-1;i>=0&&need>0;i--){
+      const p=play[i];
+      if(p.pos.includes('GK')&&play.filter(q=>q.pos.includes('GK')).length<=T)continue;
+      play.splice(i,1);bench.push(p);need--;
+    }
+    while(need>0){bench.push(play.pop());need--}
+  }
+  const sizes=sizesFor(play.length,T);
+  const c=[];for(let i=0;i<400;i++)c.push(attempt(play,sizes,T));
+  c.sort((a,b)=>a.score-b.score);
+  const diff=c.filter(x=>x.sig!==prevSig);
+  const list=(diff.length?diff:c).slice(0,8);
+  const best=list[Math.floor(Math.random()*list.length)];
+  return{teams:best.teams,bench:bench.map(p=>p.id),sig:best.sig,score:best.score};
+}
+/*END*/
+
+(function(){
+'use strict';
+document.documentElement.dir='rtl';document.documentElement.lang='fa';
+
+const POS=[{k:'GK',n:'دروازه‌بان'},{k:'DEF',n:'مدافع'},{k:'MID',n:'هافبک'},{k:'FWD',n:'مهاجم'}];
+const POSN=Object.fromEntries(POS.map(p=>[p.k,p.n]));
+const COLORS=[
+  {id:'red',n:'قرمز',hex:'#d93a3a',e:'🔴'},{id:'blue',n:'آبی',hex:'#2f6fe0',e:'🔵'},
+  {id:'yellow',n:'زرد',hex:'#f2c200',e:'🟡'},{id:'green',n:'سبز',hex:'#2ea64f',e:'🟢'},
+  {id:'white',n:'سفید',hex:'#f4f4f4',e:'⚪'},{id:'black',n:'مشکی',hex:'#1b1b1b',e:'⚫'},
+  {id:'orange',n:'نارنجی',hex:'#f08a1c',e:'🟠'},{id:'purple',n:'بنفش',hex:'#7a4fd0',e:'🟣'},
+  {id:'sky',n:'آبی آسمانی',hex:'#4cb5e8',e:'🔷'},{id:'pink',n:'صورتی',hex:'#e46aa8',e:'🌸'},
+  {id:'brown',n:'قهوه‌ای',hex:'#8a5a38',e:'🟤'}
+];
+const colorOf=id=>COLORS.find(c=>c.id===id)||COLORS[0];
+const fa=n=>Number(n).toLocaleString('fa-IR',{maximumFractionDigits:1,useGrouping:false});
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid=()=>Math.random().toString(36).slice(2,10);
+const $=id=>document.getElementById(id);
+
+const LS='tim-bandi-hafteghi-v1';
+function defaults(){return{rev:0,players:[],cfg:{teams:2,size:5,colors:['red','blue','yellow','green','orange','purple'],title:''},result:null}}
+function normalize(o){
+  const d=defaults();o=JSON.parse(JSON.stringify(o||{}));
+  const cfg=Object.assign(d.cfg,o.cfg||{});
+  cfg.teams=Math.min(6,Math.max(2,parseInt(cfg.teams)||2));cfg.size=Math.min(15,Math.max(2,parseInt(cfg.size)||5));
+  if(!Array.isArray(cfg.colors)||cfg.colors.length<6)cfg.colors=d.cfg.colors;
+  const players=(Array.isArray(o.players)?o.players:[]).filter(p=>p&&p.id&&p.name).map(p=>({
+    id:String(p.id),name:String(p.name),pos:(Array.isArray(p.pos)?p.pos:[]).filter(k=>POSN[k]),
+    rating:Math.min(10,Math.max(1,parseInt(p.rating)||5)),fit:Math.min(100,Math.max(0,parseInt(p.fit)>=0?parseInt(p.fit):100)),here:!!p.here
+  })).map(p=>{if(!p.pos.length)p.pos=['MID'];return p});
+  let result=o.result&&Array.isArray(o.result.teams)?o.result:null;
+  if(result){
+    result.bench=Array.isArray(result.bench)?result.bench:[];
+    result.reserves=result.teams.map((_,i)=>Array.isArray(result.reserves&&result.reserves[i])?result.reserves[i]:[]);
+  }
+  return{rev:Number(o.rev)||0,players,cfg,result};
+}
+let S=defaults();
+const ui={tab:'players',sel:null,confirm:null,search:'',status:'local',nf:{name:'',pos:[],rating:5,fit:100,err:''}};
+
+/* ---------- storage: browser always, shared db when available ---------- */
+let ref=null,saveTimer=null,saving=false,dirty=false,gotSnap=false;
+function loadLocal(){try{const j=localStorage.getItem(LS);if(j)S=normalize(JSON.parse(j))}catch(e){}}
+function setStatus(s){ui.status=s;const el=$('chip');if(el)el.outerHTML=chipHTML()}
+function chipHTML(){
+  const m={local:['فقط روی همین مرورگر ذخیره می‌شود',''],db:['ذخیره در حساب فعال است','ok'],saving:['در حال ذخیره…',''],slow:['ذخیره‌سازی حساب در دسترس نیست؛ روی مرورگر ذخیره می‌شود','err'],error:['ذخیره در حساب ناموفق بود؛ روی مرورگر ذخیره شد','err']}[ui.status]||['',''];
+  return`<span class="chip-st ${m[1]}" id="chip">${m[0]}</span>`;
+}
+function persist(){
+  S.rev=Date.now();
+  try{localStorage.setItem(LS,JSON.stringify(S))}catch(e){}
+  dirty=true;clearTimeout(saveTimer);saveTimer=setTimeout(flush,600);
+}
+async function flush(){
+  if(!ref)return;
+  if(saving){saveTimer=setTimeout(flush,300);return}
+  if(!dirty)return;
+  saving=true;dirty=false;setStatus('saving');
+  try{await ref.set(JSON.parse(JSON.stringify(S)));setStatus('db')}
+  catch(e){dirty=true;setStatus('error')}
+  saving=false;
+  if(dirty&&ui.status!=='error')saveTimer=setTimeout(flush,600);
+}
+async function initDb(){
+  const c=window.claude;if(!c||!c.use)return;
+  const to=setTimeout(()=>{if(!gotSnap)setStatus('slow')},10000);
+  let db=null;try{db=await c.use('db')}catch(e){db=null}
+  if(!db){clearTimeout(to);return}
+  ref=db.doc('app/state');
+  ref.onSnapshot(snap=>{
+    gotSnap=true;clearTimeout(to);
+    if(!snap.metadata.fromCache&&ui.status!=='saving'&&ui.status!=='error')setStatus('db');
+    if(snap.metadata.hasPendingWrites||dirty||saving)return;
+    if(snap.exists){
+      const d=snap.data();
+      if((d.rev||0)>S.rev){S=normalize(d);try{localStorage.setItem(LS,JSON.stringify(S))}catch(e){}render()}
+    }
+  },()=>setStatus('error'));
+}
+
+/* ---------- helpers ---------- */
+const byId=()=>Object.fromEntries(S.players.map(p=>[p.id,p]));
+function statusOf(f){
+  if(f===0)return{t:'خارج از بازی',c:'bad'};
+  if(f<50)return{t:'مصدوم',c:'bad'};
+  if(f<90)return{t:'نیمه‌آماده',c:'warn'};
+  return{t:'آماده',c:'good'};
+}
+function teamName(i){
+  const c=colorOf(S.cfg.colors[i]);
+  const dup=S.cfg.colors.slice(0,S.cfg.teams).filter(x=>x===S.cfg.colors[i]).length>1;
+  const k=S.cfg.colors.slice(0,i).filter(x=>x===S.cfg.colors[i]).length+1;
+  return`تیم ${c.n}`+(dup?` ${fa(k)}`:'');
+}
+function defaultTitle(){
+  try{return'تیم‌بندی بازی '+new Date().toLocaleDateString('fa-IR-u-ca-persian',{weekday:'long',day:'numeric',month:'long'})}
+  catch(e){return'تیم‌بندی بازی'}
+}
+let toastT=null;
+function toast(msg){const t=$('toast');t.innerHTML=`<span>${esc(msg)}</span>`;clearTimeout(toastT);toastT=setTimeout(()=>{t.innerHTML=''},2400)}
+const jersey=hex=>`<svg class="jersey" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3 3 6l2 4 2-1v11h10V9l2 1 2-4-5-3c-1 2-7 2-8 0Z" fill="${hex}" stroke="var(--fg)" stroke-opacity=".45" stroke-width="1.2" stroke-linejoin="round"/></svg>`;
+
+/* ---------- views ---------- */
+function headerHTML(){
+  const here=S.players.filter(p=>p.here&&p.fit>0).length;
+  return`<div><h1>تیم‌بندی هفتگی</h1><p>${fa(S.players.length)} بازیکن ثبت‌شده · ${fa(here)} نفر این هفته حاضر</p></div>${chipHTML()}`;
+}
+function tabsHTML(){
+  const t=[['players','۱. بازیکنان'],['attend','۲. حضور و تنظیمات'],['result','۳. تیم‌ها']];
+  return t.map(([k,n])=>`<button class="tab" role="tab" aria-selected="${ui.tab===k}" data-act="tab" data-tab="${k}">${n}</button>`).join('');
+}
+const posChips=(sel,act)=>POS.map(p=>`<button type="button" class="chip pos-${p.k}" data-act="${act}" data-k="${p.k}" aria-pressed="${sel.includes(p.k)}">${p.n}</button>`).join('');
+const rangeHTML=(label,val,min,max,step,attr,unit)=>`<label class="rng"><span class="rt">${label}</span><output>${fa(val)}${unit||''}</output><input type="range" min="${min}" max="${max}" step="${step}" value="${val}" ${attr}></label>`;
+
+function playerRow(p){
+  const st=statusOf(p.fit);
+  const del=ui.confirm===p.id
+    ?`<span class="del-ask">حذف شود؟<button class="mini bad" data-act="del-yes">بله</button><button class="mini" data-act="del-no">خیر</button></span>`
+    :`<button class="mini" data-act="del" aria-label="حذف ${esc(p.name)}">حذف</button>`;
+  return`<article class="pl" data-id="${p.id}">
+    <div class="pl-head"><input class="nm" type="text" value="${esc(p.name)}" data-f="name" aria-label="نام بازیکن"><span class="tag ${st.c}">${st.t}</span>${del}</div>
+    <div class="chips">${posChips(p.pos,'pos')}</div>
+    <div class="two">${rangeHTML('سطح بازی (۱ تا ۱۰)',p.rating,1,10,1,'data-f="rating"')}${rangeHTML('درصد آمادگی',p.fit,0,100,5,'data-f="fit"','٪')}</div>
+  </article>`;
+}
+function listHTML(){
+  const q=ui.search.trim();
+  const arr=S.players.filter(p=>!q||p.name.includes(q)).sort((a,b)=>a.name.localeCompare(b.name,'fa'));
+  if(!S.players.length)return`<div class="empty"><div>هنوز بازیکنی ثبت نشده. از فرم بالا اولین نفر را اضافه کنید یا با چند بازیکن نمونه شروع کنید.</div><button class="btn" data-act="samples">افزودن ۱۳ بازیکن نمونه</button></div>`;
+  if(!arr.length)return`<div class="empty">بازیکنی با این نام پیدا نشد.</div>`;
+  return arr.map(playerRow).join('');
+}
+function viewPlayers(){
+  const nf=ui.nf;
+  return`<section class="card" aria-labelledby="addh"><h2 id="addh">افزودن بازیکن</h2>
+    <label class="fld"><span>نام</span><input id="nf-name" type="text" data-nf="name" value="${esc(nf.name)}" placeholder="مثلاً علی"></label>
+    <div class="fld"><span>پست‌هایی که می‌تواند بازی کند (چند مورد هم ممکن است)</span><div class="chips">${posChips(nf.pos,'nf-pos')}</div></div>
+    <div class="two">${rangeHTML('سطح بازی (۱ تا ۱۰)',nf.rating,1,10,1,'data-nf="rating"')}${rangeHTML('درصد آمادگی',nf.fit,0,100,5,'data-nf="fit"','٪')}</div>
+    ${nf.err?`<div class="note bad" role="alert">${esc(nf.err)}</div>`:''}
+    <button class="btn primary" data-act="add">افزودن به لیست</button></section>
+  <div class="row" style="justify-content:space-between;margin-bottom:8px"><h2 style="font-size:17px">لیست بازیکنان</h2>
+    ${S.players.length>8?`<input type="text" id="search" placeholder="جستجوی نام" value="${esc(ui.search)}" style="max-width:180px" aria-label="جستجو">`:''}</div>
+  <p class="muted" style="margin:0 0 10px;font-size:13.5px">سطح، پست و درصد آمادگی را مستقیم همین‌جا ویرایش کنید. اگر کسی مصدوم شد، درصدش را کم کنید؛ تا زمانی که بالا نبرید در تیم‌بندی‌های بعدی هم اثر می‌گذارد. قدرت مؤثر = سطح × درصد آمادگی.</p>
+  <div id="plist">${listHTML()}</div>`;
+}
+
+function presentList(){return S.players.filter(p=>p.here&&p.fit>0)}
+function viewAttend(){
+  const pr=presentList(),n=pr.length,T=S.cfg.teams,size=S.cfg.size,cap=T*size;
+  const gk=pr.filter(p=>p.pos.includes('GK')).length;
+  let note;
+  if(n<T)note=['bad',`حداقل ${fa(T)} بازیکن حاضر لازم است (الان ${fa(n)} نفر).`];
+  else if(n<cap){
+    const base=Math.floor(n/T),ex=n%T;
+    note=['warn',`${fa(n)} نفر حاضرند و ظرفیت ${fa(cap)} نفر است. تیم‌ها کوچک‌تر و مساوی تقسیم می‌شوند (حدود ${fa(base)}${ex?' تا '+fa(base+1):''} نفر).`];
+  }else if(n>cap)note=['warn',`${fa(n)} نفر حاضرند و ظرفیت ${fa(cap)} نفر است؛ ${fa(n-cap)} نفر ذخیره می‌ماند.`];
+  else note=['good',`${fa(n)} نفر حاضرند و دقیقاً با ظرفیت ${fa(T)} تیم × ${fa(size)} نفر برابرند.`];
+  const sugs=[];
+  for(let t=2;t<=6;t++){const s=Math.floor(n/t);if(s>=2){
+    const act=S.cfg.teams===t&&S.cfg.size===s;
+    sugs.push(`<button class="chip" aria-pressed="${act}" style="--c:var(--accent)" data-act="sug" data-t="${t}" data-s="${s}">${fa(t)} تیم × ${fa(s)} نفر${n%t?` (+${fa(n%t)} ذخیره)`:''}</button>`)}}
+  const colorRows=Array.from({length:T},(_,i)=>{
+    const cur=S.cfg.colors[i],c=colorOf(cur);
+    return`<div class="crow">${jersey(c.hex)}<span class="lbl">تیم ${fa(i+1)}</span><div class="chips" role="group" aria-label="رنگ لباس تیم ${fa(i+1)}">${COLORS.map(x=>`<button type="button" class="sw" style="--c:${x.hex}" aria-label="${x.n}" title="${x.n}" aria-pressed="${cur===x.id}" data-act="color" data-ti="${i}" data-c="${x.id}"></button>`).join('')}</div><span class="muted" style="font-size:13px">${c.n}</span></div>`}).join('');
+  const rows=S.players.slice().sort((a,b)=>a.name.localeCompare(b.name,'fa')).map(p=>{
+    const off=p.fit===0,st=statusOf(p.fit);
+    return`<label class="at ${off?'off':''}"><input type="checkbox" data-act="here" data-id="${p.id}" ${p.here&&!off?'checked':''} ${off?'disabled':''}>
+      <span class="at-main"><b>${esc(p.name)}</b><span class="chips">${p.pos.map(k=>`<span class="badge pos-${k}" style="--c:var(--r-${k.toLowerCase()})">${POSN[k]}</span>`).join('')}</span></span>
+      <span class="at-meta">سطح ${fa(p.rating)} · <span class="tag ${st.c}">${st.t} ${fa(p.fit)}٪</span></span></label>`}).join('');
+  return`<section class="card"><h2>حضور و غیاب این هفته</h2>
+    ${S.players.length?`<div class="row" style="margin-bottom:10px"><button class="btn" data-act="all">انتخاب همه</button><button class="btn" data-act="none">هیچ‌کس</button><button class="btn ghost" data-act="newweek">شروع هفته جدید</button></div>${rows}`:`<div class="empty">اول در مرحله ۱ بازیکن‌ها را ثبت کنید.</div>`}</section>
+  <section class="card"><h2>تعداد و رنگ تیم‌ها</h2>
+    <div class="row" style="gap:28px;margin-bottom:8px">
+      <div><div class="muted" style="font-size:13px;font-weight:600">تعداد تیم</div><div class="stepper"><button data-act="cfg" data-k="teams" data-d="-1" aria-label="کمتر">−</button><output>${fa(T)}</output><button data-act="cfg" data-k="teams" data-d="1" aria-label="بیشتر">+</button></div></div>
+      <div><div class="muted" style="font-size:13px;font-weight:600">نفرات هر تیم</div><div class="stepper"><button data-act="cfg" data-k="size" data-d="-1" aria-label="کمتر">−</button><output>${fa(size)}</output><button data-act="cfg" data-k="size" data-d="1" aria-label="بیشتر">+</button></div></div>
+    </div>
+    ${sugs.length?`<div class="muted" style="font-size:13px">پیشنهاد برای ${fa(n)} نفر حاضر:</div><div class="sug">${sugs.join('')}</div>`:''}
+    <div class="note ${note[0]}">${note[1]}</div>
+    ${gk<T&&n>=T?`<div class="note warn">دروازه‌بان حاضر کمتر از تعداد تیم‌هاست (${fa(gk)} از ${fa(T)}). بعضی تیم‌ها دروازه‌بان نخواهند داشت.</div>`:''}
+    ${colorRows}</section>
+  <button class="btn primary big" data-act="gen" ${S.players.length?'':'disabled'}>${S.result?'تیم‌بندی دوباره (ترکیب جدید)':'تیم‌بندی کن'}</button>`;
+}
+
+function stats(t,map){
+  const mem=t.ids.map(id=>map[id]).filter(Boolean);
+  const power=mem.reduce((s,p)=>s+eff(p),0);
+  return{mem,power,avg:mem.length?power/mem.length:0,gk:mem.some(p=>t.roles[p.id]==='GK')};
+}
+function memRow(p,role,t){
+  const sel=ui.sel===p.id,multi=t&&p.pos.length>1;
+  const badge=!t?'':multi
+    ?`<button class="badge pos-${role}" style="--c:var(--r-${role.toLowerCase()})" data-act="role" data-id="${p.id}" title="تغییر پست" aria-label="پست ${POSN[role]}؛ برای تغییر بزنید">${POSN[role]} ⇄</button>`
+    :`<span class="badge pos-${role}" style="--c:var(--r-${role.toLowerCase()})">${POSN[role]}</span>`;
+  return`<div class="mem ${sel?'sel':''}"><button class="mem-main" data-act="sel" data-id="${p.id}" aria-pressed="${sel}"><span>${esc(p.name)}</span><span>${fa(eff(p))}</span></button>${badge}</div>`;
+}
+function viewResult(){
+  const R=S.result,map=byId();
+  if(!R)return`<div class="empty"><div>هنوز تیم‌بندی انجام نشده. حاضرها را در مرحله ۲ انتخاب کنید و دکمه تیم‌بندی را بزنید.</div><button class="btn primary" data-act="tab" data-tab="attend">رفتن به حضور و غیاب</button></div>`;
+  const st=R.teams.map(t=>stats(t,map));
+  const maxAvg=Math.max(0.01,...st.map(s=>s.avg)),minAvg=Math.min(...st.map(s=>s.avg));
+  const diff=Math.round((maxAvg-minAvg)/maxAvg*100);
+  const selP=ui.sel?map[ui.sel]:null;
+  const bars=R.teams.map((t,i)=>`<div class="bar" style="--c:${colorOf(S.cfg.colors[i]).hex}"><span>${esc(teamName(i))}</span><div class="trk"><i style="width:${Math.round(st[i].avg/maxAvg*100)}%"></i></div><b>${fa(st[i].avg)}</b></div>`).join('');
+  const roleOrder=r=>ROLES.indexOf(r);
+  const cards=R.teams.map((t,i)=>{
+    const c=colorOf(S.cfg.colors[i]),s=st[i];
+    const mem=s.mem.slice().sort((a,b)=>roleOrder(t.roles[a.id])-roleOrder(t.roles[b.id])||eff(b)-eff(a));
+    const loc=selP?locate(selP.id):null;
+    const res=(R.reserves[i]||[]).map(id=>map[id]).filter(Boolean);
+    const acts=selP?`<div class="team-act">${loc!=='t'+i?`<button class="mini acc" data-act="moveto" data-loc="t${i}">انتقال به اینجا</button>`:''}${loc!=='r'+i?`<button class="mini" data-act="moveto" data-loc="r${i}">ذخیره این تیم</button>`:''}</div>`:'';
+    return`<section class="team" style="--c:${c.hex}"><div class="team-h">${jersey(c.hex)}<h3>${esc(teamName(i))}</h3><small>${fa(mem.length)} نفر · میانگین ${fa(s.avg)}</small></div>${acts}
+      ${mem.map(p=>memRow(p,t.roles[p.id],t)).join('')||'<div class="warnline muted">تیم خالی است</div>'}
+      ${s.gk?'':`<div class="warnline">این تیم دروازه‌بان ندارد.</div>`}
+      ${res.length?`<div class="sub">ذخیره‌های این تیم (${fa(res.length)})</div>${res.map(p=>memRow(p,null,null)).join('')}`:''}</section>`}).join('');
+  const bench=R.bench.map(id=>map[id]).filter(Boolean);
+  const benchCard=(bench.length||selP)?`<section class="team" style="--c:var(--line)"><div class="team-h"><h3>ذخیره‌های بدون تیم</h3><small>${fa(bench.length)} نفر</small></div>${(selP&&locate(selP.id)!=='b')||bench.length?`<div class="team-act">${selP&&locate(selP.id)!=='b'?`<button class="mini acc" data-act="moveto" data-loc="b">انتقال به بدون تیم</button>`:''}${bench.length?`<button class="mini" data-act="autores">پخش خودکار بین تیم‌ها</button>`:''}</div>`:''}${bench.map(p=>memRow(p,null,null)).join('')||'<div class="warnline muted">کسی بدون تیم نیست</div>'}</section>`:'';
+  return`${selP?`<div class="selbar"><span>جابجایی «${esc(selP.name)}»: روی بازیکن دیگر بزنید تا جابه‌جا شوند، یا «انتقال به اینجا» را در تیم دلخواه بزنید.</span><button data-act="cancelsel">لغو</button></div>`:''}
+  <div class="row" style="margin-bottom:12px"><button class="btn primary" data-act="gen">تیم‌بندی دوباره (ترکیب جدید)</button><span class="muted" style="font-size:13.5px">برای جابجایی دستی، اسم یک بازیکن را بزنید.</span></div>
+  <section class="card"><h2>تعادل قدرت</h2><div class="bars">${bars}</div><p class="muted" style="margin:10px 0 0;font-size:13.5px">میانگین قدرت مؤثر هر نفر؛ اختلاف بیشترین و کمترین تیم حدود ${fa(diff)}٪ است.</p></section>
+  <div class="grid">${cards}${benchCard}</div>
+  <section class="card"><h2>متن برای ارسال در گروه</h2>
+    <label class="fld"><span>عنوان پیام</span><input type="text" id="title" value="${esc(S.cfg.title)}" placeholder="${esc(defaultTitle())}"></label>
+    <textarea id="msg" aria-label="متن پیام">${esc(buildText())}</textarea>
+    <div class="row" style="margin-top:10px"><button class="btn primary" data-act="copy">کپی متن</button></div></section>`;
+}
+function buildText(){
+  const R=S.result;if(!R)return'';
+  const map=byId(),L=[`⚽ ${S.cfg.title.trim()||defaultTitle()}`,''];
+  R.teams.forEach((t,i)=>{
+    const c=colorOf(S.cfg.colors[i]);
+    L.push(`${c.e} ${teamName(i)} — لباس ${c.n}`);
+    const mem=t.ids.map(id=>map[id]).filter(Boolean).sort((a,b)=>ROLES.indexOf(t.roles[a.id])-ROLES.indexOf(t.roles[b.id]));
+    mem.forEach((p,k)=>L.push(`${fa(k+1)}. ${p.name} (${POSN[t.roles[p.id]]})`));
+    const rs=(R.reserves[i]||[]).map(id=>map[id]).filter(Boolean);
+    if(rs.length)L.push('🔄 ذخیره: '+rs.map(p=>p.name).join('، '));
+    L.push('');
+  });
+  const b=R.bench.map(id=>map[id]).filter(Boolean);
+  if(b.length)L.push('🔄 ذخیره (بدون تیم مشخص): '+b.map(p=>p.name).join('، '));
+  return L.join('\n').trim();
+}
+
+function render(){
+  $('hdr').innerHTML=headerHTML();$('tabs').innerHTML=tabsHTML();
+  $('view').innerHTML=ui.tab==='players'?viewPlayers():ui.tab==='attend'?viewAttend():viewResult();
+}
+
+/* ---------- actions ---------- */
+function samples(){
+  const D=[['علی',['GK'],7],['رضا',['GK','DEF'],5],['مهدی',['DEF'],6],['حسین',['DEF','MID'],7],['امیر',['MID'],8],['سعید',['MID','FWD'],6],['بهنام',['FWD'],9],['پویا',['DEF'],4],['کاوه',['MID'],5],['نیما',['FWD','MID'],7],['آرمان',['DEF'],6],['میلاد',['MID'],8],['فرهاد',['FWD'],5]];
+  D.forEach(([name,pos,rating],i)=>S.players.push({id:uid(),name,pos,rating,fit:i===7?50:100,here:i<10}));
+  persist();render();
+}
+function addPlayer(){
+  const nf=ui.nf,name=nf.name.trim();
+  if(!name){nf.err='نام بازیکن را وارد کنید.';render();$('nf-name').focus();return}
+  if(!nf.pos.length){nf.err='حداقل یک پست انتخاب کنید.';render();return}
+  S.players.push({id:uid(),name,pos:ROLES.filter(k=>nf.pos.includes(k)),rating:nf.rating,fit:nf.fit,here:false});
+  ui.nf={name:'',pos:[],rating:5,fit:100,err:''};
+  persist();render();toast(`«${name}» اضافه شد`);$('nf-name').focus();
+}
+function generate(){
+  const pool=presentList(),T=S.cfg.teams;
+  if(pool.length<T){toast(`حداقل ${fa(T)} بازیکن حاضر لازم است`);ui.tab='attend';render();return}
+  const plan=planTeams(pool,T,S.cfg.size,S.result&&S.result.sig);
+  S.result={teams:plan.teams,bench:plan.bench,reserves:plan.teams.map(()=>[]),sig:plan.sig};
+  ui.sel=null;ui.tab='result';persist();render();window.scrollTo(0,0);
+}
+/* مکان بازیکن: t0 = بازیکن اصلی تیم ۱، r0 = ذخیره تیم ۱، b = ذخیره بدون تیم */
+function locate(id){
+  const R=S.result;
+  for(let i=0;i<R.teams.length;i++){
+    if(R.teams[i].ids.includes(id))return't'+i;
+    if((R.reserves[i]||[]).includes(id))return'r'+i;
+  }
+  return R.bench.includes(id)?'b':null;
+}
+function fixRole(p,prev){return p.pos.includes(prev)?prev:(p.pos.find(k=>k!=='GK')||p.pos[0])}
+function removeFrom(id,loc){
+  const R=S.result;
+  if(loc==='b')R.bench=R.bench.filter(x=>x!==id);
+  else if(loc[0]==='r'){const i=+loc.slice(1);R.reserves[i]=(R.reserves[i]||[]).filter(x=>x!==id)}
+  else{const t=R.teams[+loc.slice(1)];t.ids=t.ids.filter(x=>x!==id);delete t.roles[id]}
+}
+function addTo(p,loc,prevRole){
+  const R=S.result;
+  if(loc==='b')R.bench.push(p.id);
+  else if(loc[0]==='r'){const i=+loc.slice(1);(R.reserves[i]=R.reserves[i]||[]).push(p.id)}
+  else{const t=R.teams[+loc.slice(1)];t.ids.push(p.id);t.roles[p.id]=fixRole(p,prevRole)}
+}
+function roleAt(id,loc){return loc&&loc[0]==='t'?S.result.teams[+loc.slice(1)].roles[id]:null}
+function swap(a,b){
+  const map=byId(),la=locate(a),lb=locate(b);
+  if(!la||!lb)return;
+  const ra=roleAt(a,la),rb=roleAt(b,lb);
+  removeFrom(a,la);removeFrom(b,lb);
+  addTo(map[a],lb,ra);addTo(map[b],la,rb);
+}
+function moveTo(id,loc){
+  const p=byId()[id],from=locate(id);
+  if(!p||!from||from===loc)return;
+  const r=roleAt(id,from);
+  removeFrom(id,from);addTo(p,loc,r);
+}
+function player(el){const r=el.closest('[data-id]');return r?S.players.find(p=>p.id===r.dataset.id):null}
+
+document.addEventListener('click',e=>{
+  const b=e.target.closest('[data-act]');if(!b)return;
+  const act=b.dataset.act;
+  if(act==='here')return;
+  if(act==='tab'){ui.tab=b.dataset.tab;ui.sel=null;render();return}
+  if(act==='nf-pos'){const k=b.dataset.k,a=ui.nf.pos;ui.nf.pos=a.includes(k)?a.filter(x=>x!==k):a.concat(k);ui.nf.err='';render();return}
+  if(act==='add'){addPlayer();return}
+  if(act==='samples'){samples();return}
+  if(act==='pos'){
+    const p=player(b);if(!p)return;const k=b.dataset.k;
+    if(p.pos.includes(k)){if(p.pos.length===1){toast('هر بازیکن حداقل یک پست لازم دارد');return}p.pos=p.pos.filter(x=>x!==k)}
+    else p.pos=ROLES.filter(x=>p.pos.includes(x)||x===k);
+    persist();render();return;
+  }
+  if(act==='del'){ui.confirm=player(b).id;render();return}
+  if(act==='del-no'){ui.confirm=null;render();return}
+  if(act==='del-yes'){
+    const p=player(b);S.players=S.players.filter(x=>x.id!==p.id);ui.confirm=null;
+    if(S.result){S.result.bench=S.result.bench.filter(x=>x!==p.id);S.result.reserves=S.result.reserves.map(r=>r.filter(x=>x!==p.id));S.result.teams.forEach(t=>{t.ids=t.ids.filter(x=>x!==p.id);delete t.roles[p.id]})}
+    persist();render();return;
+  }
+  if(act==='all'){S.players.forEach(p=>{p.here=p.fit>0});persist();render();return}
+  if(act==='none'){S.players.forEach(p=>{p.here=false});persist();render();return}
+  if(act==='newweek'){S.players.forEach(p=>{p.here=false});S.result=null;ui.sel=null;persist();render();toast('هفته جدید شروع شد؛ حضور و تیم‌ها پاک شد');return}
+  if(act==='cfg'){
+    const k=b.dataset.k,d=parseInt(b.dataset.d),lim=k==='teams'?[2,6]:[2,15];
+    S.cfg[k]=Math.min(lim[1],Math.max(lim[0],S.cfg[k]+d));persist();render();return;
+  }
+  if(act==='sug'){S.cfg.teams=+b.dataset.t;S.cfg.size=+b.dataset.s;persist();render();return}
+  if(act==='color'){S.cfg.colors[+b.dataset.ti]=b.dataset.c;persist();render();return}
+  if(act==='gen'){generate();return}
+  if(act==='sel'){
+    const id=b.dataset.id;
+    if(!ui.sel)ui.sel=id;
+    else if(ui.sel===id)ui.sel=null;
+    else{swap(ui.sel,id);ui.sel=null;persist()}
+    render();return;
+  }
+  if(act==='cancelsel'){ui.sel=null;render();return}
+  if(act==='moveto'){moveTo(ui.sel,b.dataset.loc);ui.sel=null;persist();render();return}
+  if(act==='autores'){
+    const R=S.result;
+    shuffle(R.bench).forEach(id=>{
+      let bi=0;
+      R.teams.forEach((_,i)=>{if((R.reserves[i]||[]).length<(R.reserves[bi]||[]).length)bi=i});
+      (R.reserves[bi]=R.reserves[bi]||[]).push(id);
+    });
+    R.bench=[];persist();render();toast('ذخیره‌ها بین تیم‌ها پخش شدند');return;
+  }
+  if(act==='role'){
+    const id=b.dataset.id,p=byId()[id],loc=locate(id),t=S.result.teams[+loc.slice(1)];
+    const i=p.pos.indexOf(t.roles[id]);t.roles[id]=p.pos[(i+1)%p.pos.length];persist();render();return;
+  }
+  if(act==='copy'){copyText();return}
+});
+document.addEventListener('change',e=>{
+  const t=e.target;
+  if(t.dataset.act==='here'){
+    const p=player(t);if(p){p.here=t.checked;persist();$('hdr').innerHTML=headerHTML();
+      const sc=window.scrollY;render();window.scrollTo(0,sc)}
+    return;
+  }
+  if(t.dataset.f){
+    const p=player(t);if(!p)return;const f=t.dataset.f;
+    if(f==='name'){const v=t.value.trim();if(v){p.name=v}else t.value=p.name}
+    else p[f]=parseInt(t.value);
+    persist();$('hdr').innerHTML=headerHTML();
+    if(f==='fit'){const sc=window.scrollY;render();window.scrollTo(0,sc)}
+    return;
+  }
+  if(t.id==='title'){S.cfg.title=t.value;persist();const sc=window.scrollY;render();window.scrollTo(0,sc)}
+});
+document.addEventListener('input',e=>{
+  const t=e.target;
+  if(t.type==='range'){
+    const o=t.closest('.rng').querySelector('output');
+    o.textContent=fa(t.value)+(t.dataset.f==='fit'||t.dataset.nf==='fit'?'٪':'');
+    if(t.dataset.nf)ui.nf[t.dataset.nf]=parseInt(t.value);
+    return;
+  }
+  if(t.dataset.nf==='name'){ui.nf.name=t.value;return}
+  if(t.id==='search'){ui.search=t.value;$('plist').innerHTML=listHTML()}
+});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&e.target.id==='nf-name'){e.preventDefault();addPlayer()}
+  if(e.key==='Enter'&&e.target.id==='title'){e.target.blur()}
+});
+async function copyText(){
+  const ta=$('msg');
+  try{await navigator.clipboard.writeText(ta.value);toast('متن کپی شد؛ در گروه بچسبانید')}
+  catch(e){ta.focus();ta.select();toast('متن انتخاب شد؛ با کپی معمولی برش دارید')}
+}
+
+loadLocal();render();initDb();
+})();
+</script>
